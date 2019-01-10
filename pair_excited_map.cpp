@@ -33,20 +33,6 @@ using namespace LAMMPS_NS;
 
 PairExcitedMap::PairExcitedMap(LAMMPS *lmp) : Pair(lmp) {}
 
-/* ---------------------------------------------------------------------- */
-
-PairExcitedMap::~PairExcitedMap()
-{
-  if (allocated) {
-    memory->destroy(setflag);
-    memory->destroy(cutsq);
-
-    memory->destroy(cut);
-  }
-}
-
-/* ---------------------------------------------------------------------- */
-
 void PairExcitedMap::compute(int eflag, int vflag)
 {
   int j,jj,jnum,itype,jtype,ih;
@@ -139,7 +125,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
     rsq = delx*delx + dely*dely + delz*delz;
     jtype = type[j];  //TODO: don't need to care about type?
 
-    if (rsq < cutsq[itype][jtype]) {
+    if (rsq < cutsq) {
       qtmp=q[j];
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
@@ -266,25 +252,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
 }
 
 /* ----------------------------------------------------------------------
-   allocate all arrays
-------------------------------------------------------------------------- */
-
-void PairExcitedMap::allocate()
-{
-  allocated = 1;
-  int n = atom->ntypes;
-
-  memory->create(setflag,n+1,n+1,"pair:setflag");
-  for (int i = 1; i <= n; i++)
-    for (int j = i; j <= n; j++)
-      setflag[i][j] = 0;
-
-  memory->create(cutsq,n+1,n+1,"pair:cutsq");
-
-  memory->create(cut,n+1,n+1,"pair:cut");
-}
-
-/* ----------------------------------------------------------------------
    global settings
 //read when pair_style command is issued
 ------------------------------------------------------------------------- */
@@ -294,6 +261,8 @@ void PairExcitedMap::settings(int narg, char **arg)
   if (narg != 4) error->all(FLERR,"Illegal pair_style command");
 
   cut_global = force->numeric(FLERR,arg[0]);
+  cutsq = cut_global*cut_global;
+
   tagO = force->inumeric(FLERR,arg[1]);
   tagH = tagO+1; //this requires that hydrogen atoms always follow O
   tagH0= tagH+1;
@@ -302,15 +271,6 @@ void PairExcitedMap::settings(int narg, char **arg)
   //we incorporate the negative sign and constants here
   mapA = - force->numeric(FLERR,arg[2]);
   mapB = -2 * force->numeric(FLERR,arg[3]);
-
-  // reset cutoffs that have been explicitly set
-
-  if (allocated) {
-    int i,j;
-    for (i = 1; i <= atom->ntypes; i++)
-      for (j = i; j <= atom->ntypes; j++)
-        if (setflag[i][j]) cut[i][j] = cut_global;
-  }
 }
 
 /* ----------------------------------------------------------------------
@@ -319,27 +279,7 @@ void PairExcitedMap::settings(int narg, char **arg)
 
 void PairExcitedMap::coeff(int narg, char **arg)
 {
-  if (narg < 2 || narg > 3)
-    error->all(FLERR,"Incorrect args for pair coefficients");
-  if (!allocated) allocate();
-
-  int ilo,ihi,jlo,jhi;
-  force->bounds(FLERR,arg[0],atom->ntypes,ilo,ihi);
-  force->bounds(FLERR,arg[1],atom->ntypes,jlo,jhi);
-
-  double cut_one = cut_global;
-  if (narg == 3) cut_one = force->numeric(FLERR,arg[2]);
-
-  int count = 0;
-  for (int i = ilo; i <= ihi; i++) {
-    for (int j = MAX(jlo,i); j <= jhi; j++) {
-      cut[i][j] = cut_one;
-      setflag[i][j] = 1;
-      count++;
-    }
-  }
-
-  if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
+  error->all(FLERR,"This pair style takes no coefficients");
 }
 
 
@@ -361,10 +301,8 @@ void PairExcitedMap::init_style()
 
 double PairExcitedMap::init_one(int i, int j)
 {
-  if (setflag[i][j] == 0)
-    cut[i][j] = mix_distance(cut[i][i],cut[j][j]);
-
-  return cut[i][j];
+  error->all(FLERR,"This pair style has no type-wise interactions");
+  //return cut_global;
 }
 
 /* ----------------------------------------------------------------------
@@ -373,14 +311,13 @@ double PairExcitedMap::init_one(int i, int j)
 
 void PairExcitedMap::write_restart(FILE *fp)
 {
-  write_restart_settings(fp);
-
-  int i,j;
-  for (i = 1; i <= atom->ntypes; i++)
-    for (j = i; j <= atom->ntypes; j++) {
-      fwrite(&setflag[i][j],sizeof(int),1,fp);
-      if (setflag[i][j]) fwrite(&cut[i][j],sizeof(double),1,fp);
-    }
+  fwrite(&cut_global,sizeof(double),1,fp);
+  fwrite(&cutsq,sizeof(double),1,fp);
+  fwrite(&mapA,sizeof(double),1,fp);
+  fwrite(&mapB,sizeof(double),1,fp);
+  fwrite(&tagO,sizeof(tagint),1,fp);
+  fwrite(&tagH,sizeof(tagint),1,fp);
+  fwrite(&tagH0,sizeof(tagint),1,fp);
 }
 
 /* ----------------------------------------------------------------------
@@ -389,66 +326,25 @@ void PairExcitedMap::write_restart(FILE *fp)
 
 void PairExcitedMap::read_restart(FILE *fp)
 {
-  read_restart_settings(fp);
-  allocate();
-
-  int i,j;
-  int me = comm->me;
-  for (i = 1; i <= atom->ntypes; i++)
-    for (j = i; j <= atom->ntypes; j++) {
-      if (me == 0) fread(&setflag[i][j],sizeof(int),1,fp);
-      MPI_Bcast(&setflag[i][j],1,MPI_INT,0,world);
-      if (setflag[i][j]) {
-        if (me == 0) fread(&cut[i][j],sizeof(double),1,fp);
-        MPI_Bcast(&cut[i][j],1,MPI_DOUBLE,0,world);
-      }
-    }
-}
-
-/* ----------------------------------------------------------------------
-  proc 0 writes to restart file
-------------------------------------------------------------------------- */
-
-void PairExcitedMap::write_restart_settings(FILE *fp)
-{
-  fwrite(&cut_global,sizeof(double),1,fp);
-  fwrite(&offset_flag,sizeof(int),1,fp);
-  fwrite(&mix_flag,sizeof(int),1,fp);
-}
-
-/* ----------------------------------------------------------------------
-  proc 0 reads from restart file, bcasts
-------------------------------------------------------------------------- */
-
-void PairExcitedMap::read_restart_settings(FILE *fp)
-{
   if (comm->me == 0) {
     fread(&cut_global,sizeof(double),1,fp);
-    fread(&offset_flag,sizeof(int),1,fp);
-    fread(&mix_flag,sizeof(int),1,fp);
+    fread(&cutsq,sizeof(double),1,fp);
+    fread(&mapA,sizeof(double),1,fp);
+    fread(&mapB,sizeof(double),1,fp);
+
+    fread(&tagO,sizeof(tagint),1,fp);
+    fread(&tagH,sizeof(tagint),1,fp);
+    fread(&tagH0,sizeof(tagint),1,fp);
   }
+
   MPI_Bcast(&cut_global,1,MPI_DOUBLE,0,world);
-  MPI_Bcast(&offset_flag,1,MPI_INT,0,world);
-  MPI_Bcast(&mix_flag,1,MPI_INT,0,world);
+  MPI_Bcast(&cutsq,1,MPI_DOUBLE,0,world);
+  MPI_Bcast(&mapA,1,MPI_DOUBLE,0,world);
+  MPI_Bcast(&mapB,1,MPI_DOUBLE,0,world);
+
+  MPI_Bcast(&tagO,1,MPI_LMP_TAGINT,0,world);
+  MPI_Bcast(&tagH,1,MPI_LMP_TAGINT,0,world);
+  MPI_Bcast(&tagH0,1,MPI_LMP_TAGINT,0,world);
 }
-
-/* ---------------------------------------------------------------------- */
-
-double PairExcitedMap::single(int i, int j, int /*itype*/, int /*jtype*/,
-                           double rsq, double factor_coul, double /*factor_lj*/,
-                           double &fforce)
-{
-  double r2inv,rinv,forcecoul,phicoul;
-
-  r2inv = 1.0/rsq;
-  rinv = sqrt(r2inv);
-  forcecoul = force->qqrd2e * atom->q[i]*atom->q[j]*rinv;
-  fforce = factor_coul*forcecoul * r2inv;
-
-  phicoul = force->qqrd2e * atom->q[i]*atom->q[j]*rinv;
-  return factor_coul*phicoul;
-}
-
-/* ---------------------------------------------------------------------- */
 
 void *PairExcitedMap::extract(const char *str, int &dim) { return NULL; }
