@@ -18,7 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "pair_coul_cut.h"
+#include "pair_excited_map.h"
 #include "atom.h"
 #include "comm.h"
 #include "force.h"
@@ -115,7 +115,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double **fI;
   //TODO: can this proc add forces to ghost atoms?
   memory->create(fI,ntotal,3,"pairExcitedMap:forces");
-  nbytes = sizeof(double)*ntotal*3;
+  size_t nbytes = sizeof(double)*ntotal*3;
   //TODO: not necessary, but could help to identify atoms with force
   if (nbytes) memset(&fI[0][0],0.0,nbytes);
 
@@ -134,9 +134,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
     if (type[j]!=typeO)  //only test cutoff wrt O
       continue;
 
-    delx = xH - x[j][0];
-    dely = xH - x[j][1];
-    delz = xH - x[j][2];
+    delx = xH[0] - x[j][0];
+    dely = xH[1] - x[j][1];
+    delz = xH[2] - x[j][2];
     rsq = delx*delx + dely*dely + delz*delz;
     jtype = type[j];  //TODO: don't need to care about type?
 
@@ -180,9 +180,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
       //TODO: probably faster to unroll this loop
       for (ih=1; ih<3; ih++) { //TODO: are locals IDs in order OHH too?
 	qtmp = q[j];
-	delx = xH - x[j+ih][0];
-	dely = xH - x[j+ih][1];
-	delz = xH - x[j+ih][2];
+	delx = xH[0] - x[j+ih][0];
+	dely = xH[1] - x[j+ih][1];
+	delz = xH[2] - x[j+ih][2];
 	rsq = delx*delx + dely*dely + delz*delz;
 	jtype = type[j];
 
