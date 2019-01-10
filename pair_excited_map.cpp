@@ -64,6 +64,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double *q = atom->q;
   int *type = atom->type;
   int nlocal = atom->nlocal;
+  int nghost = atom->nghost;
+  int ntotal = nlocal+nghost;
   double *special_coul = force->special_coul;
   int newton_pair = force->newton_pair;
   double qqrd2e = force->qqrd2e;
@@ -79,12 +81,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //1=normal atom
   //2=excited O
   //3=excited H
-  int incEh = new int[nlocal];
-  for (ii=0; ii<nlocal; ii++)
-    incEh[ii]=0;
+  int incEh = new int[ntotal];
+  size_t nbytes = sizeof(int)*ntotal;
+  if (nbytes) memset(&incEc[0][0],0,nbytes);
   incEh[idO]=2;
   incEh[idH]=3;
-  
+
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
 
@@ -102,9 +104,10 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[2] = xH[2] - xO[2];
   double rOH=oh[0]*oh[0] + oh[1]*oh[1] + oh[2]*oh[2];
   rOH = sqrt(rOH);
-  oh[0] /= rOH; //normalize
-  oh[1] /= rOH;
-  oh[2] /= rOH;
+  double rOHinv= 1.0/rOH;
+  oh[0] *= rOHinv; //normalize
+  oh[1] *= rOHinv;
+  oh[2] *= rOHinv;
 
   //neighbor list info
   numneigh = list->numneigh;
@@ -114,10 +117,21 @@ void PairExcitedMap::compute(int eflag, int vflag)
   jlist = firstneigh[idH];
   jnum = numneigh[idH];
 
-  //compute electric field at H, and mark atoms that will have force
+  //compute electric field at H, and calculate derivative components
   double eHvec[3] = {0.0,0.0,0.0};
-  double fO[3],fH[3]; //TODO: compute one of these from the sum of the others?
-  double tmpdot;
+  double fO[3]    = {0.0,0.0,0.0};
+  double fH[3]    = {0.0,0.0,0.0};
+  double uhj[3];   //unit vector in j->H direction
+  //TODO: could compute one of these from the sum of the others
+  double tmpdot,qfact,eHtmp;
+  double **fI;
+  //TODO: can this proc add forces to ghost atoms?
+  memory->create(fI,ntotal,3,"pairExcitedMap:forces");
+  nbytes = sizeof(double)*ntotal*3;
+  //TODO: not necessary, but could help to identify atoms with force
+  if (nbytes) memset(&fI[0][0],0.0,nbytes);
+
+  //loop through neighs of H
   for (jj = 0; jj < jnum; jj++) {
     j = jlist[jj];
     if (type[jj]!=typeO)  //only test cutoff wrt O
@@ -125,50 +139,101 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
     //TODO: this is to exclude same molecule, but list takes care of that?
     //factor_coul = special_coul[sbmask(j)];
-    
+    factor_coul = 1.0;
+
     //TODO: what does this do?
     j &= NEIGHMASK;
-    
+
     delx = xH - x[j][0];
     dely = xH - x[j][1];
     delz = xH - x[j][2];
     rsq = delx*delx + dely*dely + delz*delz;
     jtype = type[j];
-    
+
     if (rsq < cutsq[itype][jtype]) {
+      qtmp=q[j];
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
-      forcecoul = qqrd2e * scale[itype][jtype] * q[j]*rinv;
-      fpair = factor_coul*forcecoul * r2inv;
-      
-      eHvec[0] += delx*fpair;  //has lammps units of force/charge
-      eHvec[1] += dely*fpair;
-      eHvec[2] += delz*fpair;
 
-      incEh[j] = 1;
+      //normalize hj vector
+      uhj[0]=delx*rinv;
+      uhj[1]=dely*rinv;
+      uhj[2]=delz*rinv;
 
-      tmpdot = delx*oh[0] + dely*oh[1] + delz*oh[2];
-      
+      //TODO: don't need scale
+      eHtmp = factor_coul * qqrd2e * scale[itype][jtype] * qtmp * r2inv;
+
+      //accumulate eH
+      eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
+      eHvec[1] += uhj[1]*eHtmp;
+      eHvec[2] += uhj[2]*eHtmp;
+
+      incEh[j] = 1;  //TODO: don't need this any more
+
+      //TODO: do we need any unit conversions (qqrd2e, etc) here
+      //get force vectors
+      qfact  = qtmp * r2inv;
+      tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
+      fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;
+      fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
+      fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
+
+      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);
+      fI[j][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
+      fI[j][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
+
+      fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
+			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );
+      fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
+			  (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
+      fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
+			  (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
 
       //now compute field from hydrogens on that oxygen
       //TODO: probably faster to unroll this loop
       for (ih=1; ih<3; ih++) { //TODO: are locals IDs in order OHH too?
+	qtmp = q[j];
 	delx = xH - x[j+ih][0];
 	dely = xH - x[j+ih][1];
 	delz = xH - x[j+ih][2];
 	rsq = delx*delx + dely*dely + delz*delz;
 	jtype = type[j];
-	
+
 	r2inv = 1.0/rsq;
 	rinv = sqrt(r2inv);
-	forcecoul = qqrd2e * scale[itype][jtype] * q[j]*rinv;
-	fpair = factor_coul*forcecoul * r2inv;
-	
-	eHvec[0] += delx*fpair;  //has lammps units of F/C
-	eHvec[1] += dely*fpair;
-	eHvec[2] += delz*fpair;
+
+	//normalize hj vector
+	uhj[0]=delx*rinv;
+	uhj[1]=dely*rinv;
+	uhj[2]=delz*rinv;
+
+	//TODO: don't need scale
+	eHtmp = factor_coul * qqrd2e * scale[itype][jtype] * qtmp * r2inv;
+
+	//accumulate eH
+	eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
+	eHvec[1] += uhj[1]*eHtmp;
+	eHvec[2] += uhj[2]*eHtmp;
 
 	incEh[j+ih] = 1;
+
+	//get force vectors
+	qfact  = qtmp * r2inv;
+	tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
+	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;
+	fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
+	fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
+
+	fI[j+ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);
+	fI[j+ih][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
+	fI[j+ih][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
+
+	fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
+			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );
+	fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
+			    (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
+	fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
+			    (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
       }
     }
   }
@@ -181,22 +246,22 @@ void PairExcitedMap::compute(int eflag, int vflag)
   // loop over neighbors of excited H and compute force due to eH
   for (jj = 0; jj < jnum; jj++) {
     j = jlist[jj];
-    
+
     factor_coul = special_coul[sbmask(j)];  //this will exclude same molecule
     j &= NEIGHMASK;
-    
+
     delx = xtmp - x[j][0];
     dely = ytmp - x[j][1];
     delz = ztmp - x[j][2];
     rsq = delx*delx + dely*dely + delz*delz;
     jtype = type[j];
-    
+
     if (rsq < cutsq[itype][jtype]) {
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
       forcecoul = qqrd2e * scale[itype][jtype] * qtmp*q[j]*rinv;
       fpair = factor_coul*forcecoul * r2inv;
-      
+
       f[i][0] += delx*fpair;
       f[i][1] += dely*fpair;
       f[i][2] += delz*fpair;
@@ -205,16 +270,17 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	f[j][1] -= dely*fpair;
 	f[j][2] -= delz*fpair;
       }
-      
+
       if (eflag)
 	ecoul = factor_coul * qqrd2e * scale[itype][jtype] * qtmp*q[j]*rinv;
-      
+
       if (evflag) ev_tally(i,j,nlocal,newton_pair,
 			   0.0,ecoul,fpair,delx,dely,delz);
     }
   }
 
   delete[] incEh;
+  memory->destroy(fI);
 
   if (vflag_fdotr) virial_fdotr_compute();
 }
