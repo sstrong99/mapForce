@@ -1,0 +1,208 @@
+\documentclass{article}
+
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{mathtools}
+
+\providecommand{\e}[1]{\ensuremath{\times 10^{#1}}}
+\newcommand{\tc}{\ensuremath{T_\mathrm{c}}}
+\newcommand{\me}{\ensuremath{\mathrm{e}}}
+\newcommand{\perm}{\epsilon_0}
+\newcommand{\vect}[1]{\boldsymbol{\mathbf{#1}}}
+\DeclareMathOperator{\sgn}{sgn}
+
+\graphicspath{{figs/}}
+
+\begin{document}
+
+\title{Using Frequency Maps as an Excited State Potential Energy Surface}
+\author{Steven Strong}
+\date{\today}
+\maketitle
+
+The excited state potential is a quadratic function of the electric field
+\begin{equation}\label{eq:pot}
+U = aE_H+bE_H^2,
+\end{equation}
+where $E_H$ is the electric field at the excited H position $\vect{r}_H$, in the direction of the excited OH bond, $\vect{\hat r}_{OH}$
+\begin{equation}
+E_H = \vect E(\vect{r}_H) \vect{\cdot} \vect{\hat r}_{OH}.
+\end{equation}
+Here, boldface denotes vectors and hats denote unit vectors.
+The electric field is given by
+\begin{equation}
+\vect E(\vect r_H) = \sum_j \frac{q_j\vect{r}_{jH}}{r_{jH}^3}
+\end{equation}
+where $\vect{r}_{jH} = \vect r_H-\vect r_j$, so $E_H$ is
+\begin{equation}
+E_H = \sum_j \frac{q_j\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3},
+\end{equation}
+where the sum over $j$ goes over all atoms within sum cutoff distance of the tagged H, except for the atoms on the same water molecule.
+The force on particle $\alpha$ due to the potential in eq.~\ref{eq:pot} is 
+\begin{align}
+\vect F_\alpha =& -\frac{\partial}{\partial \vect r_\alpha} U \\
+=& -a\frac{\partial E_H}{\partial \vect r_\alpha} - 2bE_H\frac{\partial E_H}{\partial \vect r_\alpha} .
+\end{align}
+So, we need to evaluate the derivative $\partial_{ \vect{r}_\alpha} E_H$.
+\begin{equation}\label{eq:ehd}
+\frac{\partial E_H}{\partial \vect r_\alpha} = \sum_j q_j \frac{\partial}{\partial \vect r_\alpha} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3}.
+\end{equation}
+There are three cases to consider:
+\begin{enumerate}
+\item $\alpha=j$
+\item $\alpha=O$
+\item $\alpha=H$
+\end{enumerate}
+Whenever the atom $\alpha$ is outside the cutoff or is the other $H$ atom on the excited molecule, $\vect F_\alpha = 0$, because the potential is independent of those atom's positions.
+
+\section{Case 1}
+We begin with case 1, $\alpha=j$, and focus on the derivative
+\begin{equation}
+\frac{\partial}{\partial \vect r_j} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3}.
+\end{equation}
+This is a vector derivative of a scalar.
+We begin with the $x$-component of this derivative
+\begin{equation}\label{eq:xcomp}
+\frac{\partial}{\partial x_j} \frac{(x_H-x_j)x_{OH}+y_{jH}y_{OH} + z_{jH}z_{OH}}{|\vect r_H-\vect r_j|^3r_{OH}}. 
+\end{equation}
+The first term is
+\begin{align*}
+\frac{\partial}{\partial x_j} \frac{(x_H-x_j)x_{OH}}{|\vect r_H-\vect r_j|^3r_{OH}} =& \frac{x_{OH}}{r_{OH}} \frac{\partial}{\partial x_j} (x_H-x_j)|\vect r_H-\vect r_j|^{-3}\\
+=& \frac{x_{OH}}{r_{OH}} \left( \frac{-1}{|\vect r_H-\vect r_j|^3} -3 \frac{(x_H-x_j)}{|\vect r_H-\vect r_j|^4} \frac{\partial}{\partial x_j}|\vect r_H-\vect r_j|\right)  \\
+=& \frac{x_{OH}}{r_{OH}} \left( \frac{-1}{|\vect r_H-\vect r_j|^3} +3 \frac{(x_H-x_j)^2}{|\vect r_H-\vect r_j|^5} \right) \\
+=& \frac{x_{OH}}{r_{OH}} \left( \frac{-1}{r_{jH}^3} +3 \frac{x_{jH}^2}{r_{jH}^5} \right)
+\end{align*}
+where we used 
+\begin{align}
+\frac{\partial}{\partial x_j}|\vect r_H-\vect r_j| =& \frac{\partial}{\partial x_j}\left((x_H-x_j)+(y_H-y_j)^2+(z_H-z_j)^2\right)^{1/2} \\
+=& \frac{1}{2|\vect r_H-\vect r_j|}2(x_H-x_j)(-1) \\
+=& -\frac{(x_H-x_j)}{|\vect r_H-\vect r_j|}
+\end{align}
+The second term is 
+\begin{align*}
+\frac{\partial}{\partial x_j} \frac{y_{jH}y_{OH}}{|\vect r_H-\vect r_j|^3r_{OH}} =&\frac{y_{jH}y_{OH}}{r_{OH}} \frac{\partial}{\partial x_j} |\vect r_H-\vect r_j|^{-3} \\
+=& \frac{3y_{jH}y_{OH}}{|\vect r_H-\vect r_j|^4r_{OH}} \frac{\partial}{\partial x_j} |\vect r_H-\vect r_j| \\
+=& \frac{3y_{jH}y_{OH}(x_H-x_j)}{|\vect r_H-\vect r_j|^5r_{OH}} \\
+=& \frac{3y_{jH}y_{OH}x_{jH}}{r_{jH}^5r_{OH}}
+\end{align*}
+The third term is identical, with $y$s replaced by $z$s.
+The full result of eq.~\ref{eq:xcomp} is
+\begin{align*}
+\frac{\partial}{\partial x_j} &\frac{x_{jH}x_{OH}+y_{jH}y_{OH} + z_{jH}z_{OH}}{r_{jH}^3r_{OH}} \\
+&=\frac{x_{OH}}{r_{OH}} \left( \frac{-1}{r_{jH}^3} + 3 \frac{x_{jH}^2}{r_{jH}^5} \right) + \frac{3y_{jH}y_{OH}x_{jH}}{r_{jH}^5r_{OH}} + \frac{3z_{jH}z_{OH}x_{jH}}{r_{jH}^5r_{OH}} \\
+&= \frac{1}{r_{jH}^3} \left[ -\frac{x_{OH}}{r_{OH}} + 3\frac{x_{jH}}{r_{jH}^2r_{OH}}\left( x_{jH}x_{OH} + y_{jH}y_{OH} + z_{jH}z_{OH}\right) \right] \\
+&= \frac{1}{r_{jH}^3} \left( -\frac{x_{OH}}{r_{OH}} + 3\frac{x_{jH}}{r_{jH}^2r_{OH}}\vect r_{jH}\vect\cdot\vect r_{OH} \right) \\
+&= \frac{1}{r_{jH}^3} \left( -\frac{x_{OH}}{r_{OH}} + 3\frac{x_{jH}}{r_{jH}}\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right)
+\end{align*}
+The derivatives with respect to the other two dimensions are analogous, giving
+\begin{equation}
+\frac{\partial}{\partial \vect r_j} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} = \frac{ 3\vect{\hat r}_{jH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{OH}}{r_{jH}^3}
+\end{equation}
+
+Case 1 ($\alpha=j$) corresponds to $\alpha$ within the cutoff but not on the excited molecule.
+For this case, plugging the result into eq.~\ref{eq:ehd} gives
+\begin{align}
+\frac{\partial E_H}{\partial \vect r_\alpha} =& \sum_j q_j \frac{\partial}{\partial \vect r_\alpha} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} \\
+=& q_\alpha \frac{ 3\vect{\hat r}_{\alpha H}(\vect{\hat r}_{\alpha H}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{OH}}{r_{\alpha H}^3}
+\end{align}
+
+\section{Case 2}
+We now turn to case 2, $\alpha=O$.
+The $x$-component is
+\begin{equation}
+\frac{\partial}{\partial x_O} \frac{x_{jH}(x_H-x_O)+y_{jH}y_{OH} + z_{jH}z_{OH}}{r_{jH}^3|\vect r_H-\vect r_O|}. 
+\end{equation}
+The first term is
+\begin{align*}
+\frac{x_{jH}}{r_{jH}^3}\frac{\partial}{\partial x_O} (x_H-x_O)|\vect r_H-\vect r_O|^{-1} =& \frac{x_{jH}}{r_{jH}^3}\left( \frac{-1}{|\vect r_H-\vect r_O|} - \frac{(x_H-x_O)}{|\vect r_H-\vect r_O|^2}\frac{\partial}{\partial x_O} |\vect r_H-\vect r_O| \right) \\
+=& \frac{x_{jH}}{r_{jH}^3}\left( \frac{-1}{|\vect r_H-\vect r_O|} + \frac{(x_H-x_O)^2}{|\vect r_H-\vect r_O|^3} \right) \\
+=& \frac{x_{jH}}{r_{jH}^3}\left( \frac{-1}{r_{OH}} + \frac{x_{OH}^2}{r_{OH}^3} \right)
+\end{align*}
+The second term is
+\begin{align}
+\frac{y_{jH}y_{OH}}{r_{jH}^3}\frac{\partial}{\partial x_O} |\vect r_H-\vect r_O|^{-1} =& \frac{y_{jH}y_{OH}x_{OH}}{r_{jH}^3r_{OH}^3}.
+\end{align}
+Again, the third term is analogous.
+The full $x$-component is
+\begin{align*}
+\frac{\partial}{\partial x_O} &\frac{x_{jH}x_{OH}+y_{jH}y_{OH} + z_{jH}z_{OH}}{r_{jH}^3r_{OH}} \\
+&= \frac{x_{jH}}{r_{jH}^3}\left( \frac{-1}{r_{OH}} + \frac{x_{OH}^2}{r_{OH}^3} \right) + \frac{y_{jH}y_{OH}x_{OH}}{r_{jH}^3r_{OH}^3} + \frac{z_{jH}z_{OH}x_{OH}}{r_{jH}^3r_{OH}^3} \\
+&= \frac{1}{r_{jH}^3r_{OH}}\left( -x_{jH} + \frac{x_{jH}x_{OH}^2}{r_{OH}^2} + \frac{y_{jH}y_{OH}x_{OH}}{r_{OH}^2} + \frac{z_{jH}z_{OH}x_{OH}}{r_{OH}^2} \right) \\
+&= \frac{1}{r_{jH}^3r_{OH}}\left[ -x_{jH} + \frac{x_{OH}}{r_{OH}^2} \left( x_{jH}x_{OH} + y_{jH}y_{OH} + z_{jH}z_{OH} \right) \right] \\
+&= \frac{1}{r_{jH}^3r_{OH}}\left( -x_{jH} + \frac{x_{OH}}{r_{OH}^2} \vect r_{jH}\vect\cdot\vect r_{OH} \right) \\
+&= \frac{1}{r_{jH}^2r_{OH}}\left( -\frac{x_{jH}}{r_{jH}} + \frac{x_{OH}}{r_{OH}} \vect{ \hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right)
+\end{align*}
+So, the result for case 2 in vector form is
+\begin{equation}
+\frac{\partial}{\partial \vect r_O} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} = \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{jH}}{r_{jH}^2r_{OH}}
+\end{equation}
+
+Case 2 ($\alpha=O$) is when $\alpha$ is the oxygen atom on the excited molecule.
+For this case, plugging the result into eq.~\ref{eq:ehd} gives
+\begin{align}
+\frac{\partial E_H}{\partial \vect r_O} =& \sum_j q_j \frac{\partial}{\partial \vect r_O} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} \\
+=& \sum_j q_j \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{jH}}{r_{jH}^2r_{OH}}
+\end{align}
+Here, the sum over $j$ goes over all atoms within the cutoff, excluding the excited molecule.
+
+\section{Case 3}
+We now turn to case 3, $\alpha=H$.
+The $x$-component is
+\begin{equation}
+\frac{\partial}{\partial x_H} \frac{(x_H-x_j)(x_H-x_O)+y_{jH}y_{OH} + z_{jH}z_{OH}}{|\vect r_H-\vect r_j|^3|\vect r_H-\vect r_O|}. 
+\end{equation}
+The first term is
+\begin{align*}
+\frac{\partial}{\partial x_H} &(x_H-x_j)(x_H-x_O)|\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1} \\
+&=  (x_H-x_O)|\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1} + (x_H-x_j)\frac{\partial}{\partial x_H} (x_H-x_O)|\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1} \\
+&= \frac{x_{OH}}{r_{jH}^3r_{OH}} + x_{jH}\left(|\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1} + (x_H-x_O)\frac{\partial}{\partial x_H} |\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1}\right)\\
+&=  \frac{x_{OH}}{r_{jH}^3r_{OH}} + x_{jH}\left[\frac{1}{r_{jH}^3r_{OH}} + x_{OH}\left(|\vect r_H-\vect r_j|^{-3}\frac{\partial}{\partial x_H} |\vect r_H-\vect r_O|^{-1} + |\vect r_H-\vect r_O|^{-1} \frac{\partial}{\partial x_H}|\vect r_H-\vect r_j|^{-3}\right) \right]\\
+&= \frac{x_{OH}}{r_{jH}^3r_{OH}} + x_{jH}\left[\frac{1}{r_{jH}^3r_{OH}} + x_{OH}\left(-\frac{x_{OH}}{r_{jH}^3r_{OH}^3} -3\frac{x_{jH}}{r_{OH}r_{jH}^5}\right) \right]   \\
+&= \frac{1}{r_{jH}^3r_{OH}} \left[x_{OH} + x_{jH} - x_{jH} x_{OH}\left(\frac{x_{OH}}{r_{OH}^2} +3\frac{x_{jH}}{r_{jH}^2}\right) \right]  \\
+\end{align*}
+
+The second term is
+\begin{align*}
+y_{jH}y_{OH}\frac{\partial}{\partial x_H} |\vect r_H-\vect r_j|^{-3}|\vect r_H-\vect r_O|^{-1} =& y_{jH}y_{OH}\left(-\frac{x_{OH}}{r_{jH}^3r_{OH}^3} -3\frac{x_{jH}}{r_{OH}r_{jH}^5}\right) \\
+=&-\frac{y_{jH}y_{OH}}{r_{jH}^3r_{OH}} \left(\frac{x_{OH}}{r_{OH}^2} +3\frac{x_{jH}}{r_{jH}^2} \right)
+\end{align*}
+where we used the result from the 3rd through 5th lines above.
+The full result for the $x$-component is
+\begin{align*}
+\frac{\partial}{\partial x_H} &\frac{x_{jH}x_{OH}+y_{jH}y_{OH} + z_{jH}z_{OH}}{r_{jH}^3r_{OH}} \\
+&= \frac{1}{r_{jH}^3r_{OH}} \left[x_{OH} + x_{jH} - \left(\frac{x_{OH}}{r_{OH}^2} +3\frac{x_{jH}}{r_{jH}^2}\right) \left( x_{jH} x_{OH}+y_{jH}y_{OH} +z_{jH}z_{OH}  \right) \right] \\
+&= \frac{1}{r_{jH}^3r_{OH}} \left[x_{OH} + x_{jH} - \left(\frac{x_{OH}}{r_{OH}^2} +3\frac{x_{jH}}{r_{jH}^2}\right) \vect{r}_{jH}\vect\cdot\vect{r}_{OH} \right]
+\end{align*}
+Putting all the components together, we have
+\begin{align*}
+\frac{\partial}{\partial \vect r_H} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} =& \frac{1}{r_{jH}^3r_{OH}} \left[\vect{r}_{OH} + \vect{r}_{jH} - \left(\frac{\vect{r}_{OH}}{r_{OH}^2} +3\frac{\vect{r}_{jH}}{r_{jH}^2}\right) \vect{r}_{jH}\vect\cdot\vect{r}_{OH} \right] \\
+=& \frac{1}{r_{jH}^2} \left[\frac{\vect{\hat r}_{OH}}{r_{jH}} + \frac{\vect{\hat r}_{jH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right]
+\end{align*}
+
+Case 3 ($\alpha=H$) is when $\alpha$ is the excited hydrogen atom.
+For this case, plugging the result into eq.~\ref{eq:ehd} gives
+\begin{align}
+\frac{\partial E_H}{\partial \vect r_H} =& \sum_j q_j \frac{\partial}{\partial \vect r_H} \frac{\vect{r}_{jH}\vect\cdot\vect{\hat r}_{OH} }{r_{jH}^3} \\
+=& \sum_j q_j \frac{1}{r_{jH}^2} \left[\frac{\vect{\hat r}_{OH}}{r_{jH}} + \frac{\vect{\hat r}_{jH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right]
+\end{align}
+Here, the sum over $j$ goes over all atoms within the cutoff, excluding the excited molecule.
+
+\section{Summary}
+So, the force on particle $\alpha$ is given by 
+\begin{equation}
+\vect F_\alpha = -a\frac{\partial E_H}{\partial \vect r_\alpha} - 2bE_H\frac{\partial E_H}{\partial \vect r_\alpha} ,
+\end{equation}
+where the derivative $\partial_{ \vect r_\alpha} E_H$ is given by
+\begin{equation*}
+\frac{\partial E_H}{\partial \vect r_\alpha}  = \begin{dcases}
+q_\alpha \frac{ 3\vect{\hat r}_{\alpha H}(\vect{\hat r}_{\alpha H}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{OH}}{r_{\alpha H}^3} &\alpha=\text{different molecule}\\
+\sum_j q_j \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{jH}}{r_{jH}^2r_{OH}} &\alpha=\text{excited O} \\
+\sum_j q_j \frac{1}{r_{jH}^2} \left[\frac{\vect{\hat r}_{OH}}{r_{jH}} + \frac{\vect{\hat r}_{jH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right] &\alpha=\text{excited H} \\
+0 &\alpha=\text{outside cutoff} \\
+0 &\alpha=\text{other H on excited molecule}
+\end{dcases}
+\end{equation*}
+Here, the sums over $j$ go over all atoms within the cutoff, excluding the excited molecule.
+
+
+\end{document}
