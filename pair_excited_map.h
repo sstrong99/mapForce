@@ -43,7 +43,7 @@ class PairExcitedMap : public Pair {
 
  protected:
   double cut_global;
-  double **cut,**scale;         //TODO: don't need to check types
+  double **cut;                 //TODO: don't need to check types
   tagint tagO,tagH,tagH0;       //ids of excited chromophore; H0=non-excited H
   double mapA,mapB;             //coefficients of map energy (a*E + b*E^2)
 

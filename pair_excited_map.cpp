@@ -42,7 +42,6 @@ PairExcitedMap::~PairExcitedMap()
     memory->destroy(cutsq);
 
     memory->destroy(cut);
-    memory->destroy(scale);
   }
 }
 
@@ -51,11 +50,11 @@ PairExcitedMap::~PairExcitedMap()
 void PairExcitedMap::compute(int eflag, int vflag)
 {
   int i,j,ii,jj,inum,jnum,itype,jtype,ih;
-  double qtmp,xtmp,ytmp,ztmp,delx,dely,delz,ecoul,fpair;
+  double qtmp,xtmp,ytmp,ztmp,delx,dely,delz,epair,fpair;
   double rsq,r2inv,rinv,forcecoul,factor_coul;
   int *ilist,*jlist,*numneigh,**firstneigh;
 
-  ecoul = 0.0;
+  epair = 0.0;
   if (eflag || vflag) ev_setup(eflag,vflag);
   else evflag = vflag_fdotr = 0;
 
@@ -75,17 +74,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int idH =atom->map(tagH);
   int idH0=atom->map(tagH0);
   int typeO=type[idO];
-
-  //keep track of which atoms contribute to eH
-  //0=no contribution
-  //1=normal atom
-  //2=excited O
-  //3=excited H
-  int incEh = new int[ntotal];
-  size_t nbytes = sizeof(int)*ntotal;
-  if (nbytes) memset(&incEc[0][0],0,nbytes);
-  incEh[idO]=2;
-  incEh[idH]=3;
 
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
@@ -134,21 +122,23 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //loop through neighs of H
   for (jj = 0; jj < jnum; jj++) {
     j = jlist[jj];
-    if (type[jj]!=typeO)  //only test cutoff wrt O
+
+    //exclude same molecule from contributing to eH
+    factor_coul = special_coul[sbmask(j)];
+    if (factor_coul==0.0)
       continue;
 
-    //TODO: this is to exclude same molecule, but list takes care of that?
-    //factor_coul = special_coul[sbmask(j)];
-    factor_coul = 1.0;
-
-    //TODO: what does this do?
+    //filters out bits that encode special neighbors
     j &= NEIGHMASK;
+
+    if (type[j]!=typeO)  //only test cutoff wrt O
+      continue;
 
     delx = xH - x[j][0];
     dely = xH - x[j][1];
     delz = xH - x[j][2];
     rsq = delx*delx + dely*dely + delz*delz;
-    jtype = type[j];
+    jtype = type[j];  //TODO: don't need to care about type?
 
     if (rsq < cutsq[itype][jtype]) {
       qtmp=q[j];
@@ -160,15 +150,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
       uhj[1]=dely*rinv;
       uhj[2]=delz*rinv;
 
-      //TODO: don't need scale
-      eHtmp = factor_coul * qqrd2e * scale[itype][jtype] * qtmp * r2inv;
+      eHtmp = qqrd2e * qtmp * r2inv;
 
       //accumulate eH
       eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
       eHvec[1] += uhj[1]*eHtmp;
       eHvec[2] += uhj[2]*eHtmp;
-
-      incEh[j] = 1;  //TODO: don't need this any more
 
       //TODO: do we need any unit conversions (qqrd2e, etc) here
       //get force vectors
@@ -207,17 +194,16 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	uhj[1]=dely*rinv;
 	uhj[2]=delz*rinv;
 
-	//TODO: don't need scale
-	eHtmp = factor_coul * qqrd2e * scale[itype][jtype] * qtmp * r2inv;
+	eHtmp = qqrd2e * qtmp * r2inv;
 
 	//accumulate eH
 	eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
 	eHvec[1] += uhj[1]*eHtmp;
 	eHvec[2] += uhj[2]*eHtmp;
 
-	incEh[j+ih] = 1;
-
 	//get force vectors
+	//TODO: it seems like there is an extra factor of L^-3 here
+	//maybe this is accounted for in mapA and mapB
 	qfact  = qtmp * r2inv;
 	tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
 	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;
@@ -240,46 +226,44 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
   double mapBE = mapB * eH;
 
+  //consolidate fO and fH into fI
+  for (ii=0; ii<3; ii++) {
+    if ( fI[idO][ii] || fI[idH][ii] || fI[idH0][ii] )
+      error->one(FLERR,"forces are being added to the excited molecule");
+    fI[idO][ii]=fO[ii];
+    fI[idH][ii]=fH[ii];
+  }
+
   inum = list->inum;
   ilist = list->ilist;
 
   // loop over neighbors of excited H and compute force due to eH
+  // this should do all neighbors, but not itself
   for (jj = 0; jj < jnum; jj++) {
     j = jlist[jj];
 
-    factor_coul = special_coul[sbmask(j)];  //this will exclude same molecule
+    //factor_coul = special_coul[sbmask(j)];
     j &= NEIGHMASK;
 
-    delx = xtmp - x[j][0];
-    dely = ytmp - x[j][1];
-    delz = ztmp - x[j][2];
-    rsq = delx*delx + dely*dely + delz*delz;
-    jtype = type[j];
+    f[j][0] += mapA*fI[j][0] + mapBE*fI[j][0];
+    f[j][1] += mapA*fI[j][1] + mapBE*fI[j][1];
+    f[j][2] += mapA*fI[j][2] + mapBE*fI[j][2];
 
-    if (rsq < cutsq[itype][jtype]) {
-      r2inv = 1.0/rsq;
-      rinv = sqrt(r2inv);
-      forcecoul = qqrd2e * scale[itype][jtype] * qtmp*q[j]*rinv;
-      fpair = factor_coul*forcecoul * r2inv;
 
-      f[i][0] += delx*fpair;
-      f[i][1] += dely*fpair;
-      f[i][2] += delz*fpair;
-      if (newton_pair || j < nlocal) {
-	f[j][0] -= delx*fpair;
-	f[j][1] -= dely*fpair;
-	f[j][2] -= delz*fpair;
-      }
-
-      if (eflag)
-	ecoul = factor_coul * qqrd2e * scale[itype][jtype] * qtmp*q[j]*rinv;
-
-      if (evflag) ev_tally(i,j,nlocal,newton_pair,
-			   0.0,ecoul,fpair,delx,dely,delz);
-    }
   }
 
-  delete[] incEh;
+  //add force on excited H
+  j=idH;
+  f[j][0] += fI[j][0];
+  f[j][1] += fI[j][0];
+  f[j][2] += fI[j][0];
+
+  if (eflag)
+    epair = - mapA*eH - mapBE*eH/2;  //TODO: energy units?
+  //TODO: need to figure out virial if want to use pressure
+  //if (evflag) ev_tally(i,j,nlocal,newton_pair,
+  //			 0.0,epair,fpair,delx,dely,delz);
+
   memory->destroy(fI);
 
   if (vflag_fdotr) virial_fdotr_compute();
@@ -302,7 +286,6 @@ void PairExcitedMap::allocate()
   memory->create(cutsq,n+1,n+1,"pair:cutsq");
 
   memory->create(cut,n+1,n+1,"pair:cut");
-  memory->create(scale,n+1,n+1,"pair:scale");
 }
 
 /* ----------------------------------------------------------------------
@@ -355,7 +338,6 @@ void PairExcitedMap::coeff(int narg, char **arg)
   for (int i = ilo; i <= ihi; i++) {
     for (int j = MAX(jlo,i); j <= jhi; j++) {
       cut[i][j] = cut_one;
-      scale[i][j] = 1.0;
       setflag[i][j] = 1;
       count++;
     }
@@ -385,8 +367,6 @@ double PairExcitedMap::init_one(int i, int j)
 {
   if (setflag[i][j] == 0)
     cut[i][j] = mix_distance(cut[i][i],cut[j][j]);
-
-  scale[j][i] = scale[i][j];
 
   return cut[i][j];
 }
@@ -475,9 +455,4 @@ double PairExcitedMap::single(int i, int j, int /*itype*/, int /*jtype*/,
 
 /* ---------------------------------------------------------------------- */
 
-void *PairExcitedMap::extract(const char *str, int &dim)
-{
-  dim = 2;
-  if (strcmp(str,"scale") == 0) return (void *) scale;
-  return NULL;
-}
+void *PairExcitedMap::extract(const char *str, int &dim) { return NULL; }
