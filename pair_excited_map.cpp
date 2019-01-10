@@ -10,8 +10,11 @@
 
    See the README file in the top-level LAMMPS directory.
 //Written by Steven E Strong, based on pair_coul_cut.cpp
+
 //input file syntax is:
 //pair_style excited/map cutoff idO mapA mapB
+//no pair_coeff command should be used
+//water molecules must be in order OHH OHH ...
 ------------------------------------------------------------------------- */
 
 #include <cmath>
