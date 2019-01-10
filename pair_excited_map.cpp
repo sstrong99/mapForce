@@ -49,10 +49,10 @@ PairExcitedMap::~PairExcitedMap()
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
-  int i,j,ii,jj,inum,jnum,itype,jtype,ih;
-  double qtmp,xtmp,ytmp,ztmp,delx,dely,delz,epair,fpair;
-  double rsq,r2inv,rinv,forcecoul,factor_coul;
-  int *ilist,*jlist,*numneigh,**firstneigh;
+  int j,jj,jnum,itype,jtype,ih;
+  double qtmp,delx,dely,delz,epair,fpair;
+  double rsq,r2inv,rinv,factor_coul;
+  int *jlist,*numneigh,**firstneigh;
 
   epair = 0.0;
   if (eflag || vflag) ev_setup(eflag,vflag);
@@ -74,6 +74,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int idH =atom->map(tagH);
   int idH0=atom->map(tagH0);
   int typeO=type[idO];
+  itype = type[idH];
 
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
@@ -100,8 +101,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //neighbor list info
   numneigh = list->numneigh;
   firstneigh = list->firstneigh;
-
-  itype = type[idH];
   jlist = firstneigh[idH];
   jnum = numneigh[idH];
 
@@ -227,15 +226,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double mapBE = mapB * eH;
 
   //consolidate fO and fH into fI
-  for (ii=0; ii<3; ii++) {
+  for (int ii=0; ii<3; ii++) {
     if ( fI[idO][ii] || fI[idH][ii] || fI[idH0][ii] )
       error->one(FLERR,"forces are being added to the excited molecule");
     fI[idO][ii]=fO[ii];
     fI[idH][ii]=fH[ii];
   }
-
-  inum = list->inum;
-  ilist = list->ilist;
 
   // loop over neighbors of excited H and compute force due to eH
   // this should do all neighbors, but not itself
