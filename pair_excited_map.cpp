@@ -34,7 +34,22 @@ using namespace LAMMPS_NS;
 
 /* ---------------------------------------------------------------------- */
 
-PairExcitedMap::PairExcitedMap(LAMMPS *lmp) : Pair(lmp) {}
+PairExcitedMap::PairExcitedMap(LAMMPS *lmp) : Pair(lmp) {
+  single_enable=0;
+  restartinfo  =0;
+  reinitflag   =0;
+
+  ewaldflag = pppmflag = msmflag = dipoleflag = 1;
+  if (!force->newton)
+    error->all(FLERR,"Newton's 3rd law must be enabled to add forces to ghost atoms");
+}
+
+PairExcitedMap::~PairExcitedMap() {
+  if (allocated) {
+    memory->destroy(setflag);
+    memory->destroy(cutsq);
+  }
+}
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
@@ -128,7 +143,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
     rsq = delx*delx + dely*dely + delz*delz;
     jtype = type[j];  //TODO: don't need to care about type?
 
-    if (rsq < cutsq) {
+    if (rsq < cut2) {
       qtmp=q[j];
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
@@ -264,7 +279,7 @@ void PairExcitedMap::settings(int narg, char **arg)
   if (narg != 4) error->all(FLERR,"Illegal pair_style command");
 
   cut_global = force->numeric(FLERR,arg[0]);
-  cutsq = cut_global*cut_global;
+  cut2 = cut_global*cut_global;
 
   tagO = force->inumeric(FLERR,arg[1]);
   tagH = tagO+1; //this requires that hydrogen atoms always follow O
@@ -274,6 +289,9 @@ void PairExcitedMap::settings(int narg, char **arg)
   //we incorporate the negative sign and constants here
   mapA = - force->numeric(FLERR,arg[2]);
   mapB = -2 * force->numeric(FLERR,arg[3]);
+
+  //allocate arrays that pair class expects
+  allocate();
 }
 
 /* ----------------------------------------------------------------------
@@ -315,7 +333,7 @@ double PairExcitedMap::init_one(int i, int j)
 void PairExcitedMap::write_restart(FILE *fp)
 {
   fwrite(&cut_global,sizeof(double),1,fp);
-  fwrite(&cutsq,sizeof(double),1,fp);
+  fwrite(&cut2,sizeof(double),1,fp);
   fwrite(&mapA,sizeof(double),1,fp);
   fwrite(&mapB,sizeof(double),1,fp);
   fwrite(&tagO,sizeof(tagint),1,fp);
@@ -331,7 +349,7 @@ void PairExcitedMap::read_restart(FILE *fp)
 {
   if (comm->me == 0) {
     fread(&cut_global,sizeof(double),1,fp);
-    fread(&cutsq,sizeof(double),1,fp);
+    fread(&cut2,sizeof(double),1,fp);
     fread(&mapA,sizeof(double),1,fp);
     fread(&mapB,sizeof(double),1,fp);
 
@@ -341,13 +359,29 @@ void PairExcitedMap::read_restart(FILE *fp)
   }
 
   MPI_Bcast(&cut_global,1,MPI_DOUBLE,0,world);
-  MPI_Bcast(&cutsq,1,MPI_DOUBLE,0,world);
+  MPI_Bcast(&cut2,1,MPI_DOUBLE,0,world);
   MPI_Bcast(&mapA,1,MPI_DOUBLE,0,world);
   MPI_Bcast(&mapB,1,MPI_DOUBLE,0,world);
 
   MPI_Bcast(&tagO,1,MPI_LMP_TAGINT,0,world);
   MPI_Bcast(&tagH,1,MPI_LMP_TAGINT,0,world);
   MPI_Bcast(&tagH0,1,MPI_LMP_TAGINT,0,world);
+
+  allocate();
 }
 
 void *PairExcitedMap::extract(const char *str, int &dim) { return NULL; }
+
+void PairExcitedMap::allocate() {
+  int n = atom->ntypes;
+
+  memory->create(setflag,n+1,n+1,"pair:setflag");
+  memory->create(cutsq,n+1,n+1,"pair:cutsq");
+  for (int i = 1; i <= n; i++)
+    for (int j = i; j <= n; j++) {
+      setflag[i][j] = 1;
+      cutsq[i][j] = cut2;
+    }
+
+  allocated=1;
+}

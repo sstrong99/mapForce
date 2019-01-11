@@ -28,7 +28,7 @@ namespace LAMMPS_NS {
 class PairExcitedMap : public Pair {
  public:
   PairExcitedMap(class LAMMPS *);
-  virtual ~PairExcitedMap() {};
+  virtual ~PairExcitedMap();
   virtual void compute(int, int);
   virtual void settings(int, char **);
   void coeff(int, char **);
@@ -38,10 +38,15 @@ class PairExcitedMap : public Pair {
   void read_restart(FILE *);
   void *extract(const char *, int &);
 
+  virtual void write_restart_settings(FILE *) {};
+  virtual void read_restart_settings(FILE *) {};
+
  protected:
-  double cut_global,cutsq;
+  double cut_global,cut2;
   tagint tagO,tagH,tagH0;       //ids of excited chromophore; H0=non-excited H
   double mapA,mapB;             //coefficients of map energy (a*E + b*E^2)
+
+  virtual void allocate();
 };
 
 }
