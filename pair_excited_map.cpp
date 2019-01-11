@@ -38,6 +38,7 @@ PairExcitedMap::PairExcitedMap(LAMMPS *lmp) : Pair(lmp) {
   single_enable=0;
   restartinfo  =0;
   reinitflag   =0;
+  one_coeff    =1;
 
   ewaldflag = pppmflag = msmflag = dipoleflag = 1;
   if (!force->newton)
@@ -289,9 +290,6 @@ void PairExcitedMap::settings(int narg, char **arg)
   //we incorporate the negative sign and constants here
   mapA = - force->numeric(FLERR,arg[2]);
   mapB = -2 * force->numeric(FLERR,arg[3]);
-
-  //allocate arrays that pair class expects
-  allocate();
 }
 
 /* ----------------------------------------------------------------------
@@ -300,7 +298,15 @@ void PairExcitedMap::settings(int narg, char **arg)
 
 void PairExcitedMap::coeff(int narg, char **arg)
 {
-  error->all(FLERR,"This pair style takes no coefficients");
+  if (narg != 2)
+    error->all(FLERR,"Incorrect args for pair coefficients");
+
+  int ilo,ihi,jlo,jhi;
+  force->bounds(FLERR,arg[0],atom->ntypes,ilo,ihi);
+  force->bounds(FLERR,arg[1],atom->ntypes,jlo,jhi);
+
+  //allocate arrays that pair class expects
+  if (!allocated) allocate();
 }
 
 
@@ -322,8 +328,7 @@ void PairExcitedMap::init_style()
 
 double PairExcitedMap::init_one(int i, int j)
 {
-  error->all(FLERR,"This pair style has no type-wise interactions");
-  //return cut_global;
+  return cut_global;
 }
 
 /* ----------------------------------------------------------------------
