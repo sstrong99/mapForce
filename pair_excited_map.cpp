@@ -54,7 +54,7 @@ PairExcitedMap::~PairExcitedMap() {
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
-  int j,jj,jnum,ih;
+  int j,jj,jnum,ih,iih;
   double qtmp,delx,dely,delz,epair,fpair;
   double rsq,r2inv,rinv,factor_coul;
   int *jlist,*numneigh,**firstneigh;
@@ -67,6 +67,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double **f = atom->f;
   double *q = atom->q;
   int *type = atom->type;
+  tagint *tag = atom->tag;
   int nlocal = atom->nlocal;
   int nghost = atom->nghost;
   int ntotal = nlocal+nghost;
@@ -160,18 +161,18 @@ void PairExcitedMap::compute(int eflag, int vflag)
       eHvec[2] += uhj[2]*eHtmp;
 
       //get force vectors
-      qfact  = qqrd2e * qtmp * r2inv; //energy/charge*length  = F/Q
+      qfact  = qtmp * r2inv;  //will convert after loop for efficiency
       tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2]; 
-      fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv; //F/Q*L
+      fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv; //Q/L^3
       fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
       fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]); //F/Q*L
+      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]); //Q/L^3
       fI[j][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
       fI[j][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
       fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
-			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot ); //F/Q*L
+			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot ); //Q/L^3
       fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
 			  (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
       fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
@@ -179,11 +180,15 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
       //now compute field from hydrogens on that oxygen
       //TODO: probably faster to unroll this loop
-      for (ih=1; ih<3; ih++) { //TODO: locals IDs are not in order OHH!!
-	qtmp = q[j];
-	delx = xH[0] - x[j+ih][0];
-	dely = xH[1] - x[j+ih][1];
-	delz = xH[2] - x[j+ih][2];
+      for (iih=1; iih<3; iih++) {
+	ih = atom->map(tag[j] + iih);  //get local id of next H atom
+	if (ih==-1)
+          error->one(FLERR,"hydrogen is missing");
+	
+	qtmp = q[ih];
+	delx = xH[0] - x[ih][0];
+	dely = xH[1] - x[ih][1];
+	delz = xH[2] - x[ih][2];
 	rsq = delx*delx + dely*dely + delz*delz;
 
 	r2inv = 1.0/rsq;
@@ -202,32 +207,33 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	eHvec[2] += uhj[2]*eHtmp;
 
 	//get force vectors
-	qfact  = qqrd2e * qtmp * r2inv;  //energy/charge*length = F/Q
+	qfact  = qtmp * r2inv;  //will convert after loop for efficiency
 	tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
-	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;   //F/Q*L
+	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;   //Q/L^3
 	fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
 	fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-	fI[j+ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);  //F/Q*L
-	fI[j+ih][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
-	fI[j+ih][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
+	fI[ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);  //Q/L^3
+	fI[ih][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
+	fI[ih][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
 	fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
-			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );  //F/Q*L
+			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );  //Q/L^3
 	fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
 			    (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
 	fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
 			    (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
       }
     }
-    fprintf(screen,"%d %f %f %f\n",j,fI[idO][0],fI[idO][1],fI[idO][2]);
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
   eH *= qqrd2e; //energy/charge*length
   double mapC = mapA + mapB*eH;  //charge*length
+  mapC *= qqrd2e; //convert Q/L^3 to E/QL^2 and to F
 
   //consolidate fO and fH into fI
   for (int ii=0; ii<3; ii++) {
+    //TODO: this test should be unnecessary
     if ( fI[idO][ii] || fI[idH][ii] || fI[idH0][ii] )
       error->one(FLERR,"forces are being added to the excited molecule");
     fI[idO][ii]=fO[ii];
@@ -273,6 +279,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   fTot[2] += fThis[2];
 
   //TODO: fTot should be zero
+  fprintf(screen,"%f %f %f\n",fTot[0],fTot[1],fTot[2]);
 
   if (eflag)
     epair = - mapA*eH - mapB*eH*eH/2;   //in lammps energy units
