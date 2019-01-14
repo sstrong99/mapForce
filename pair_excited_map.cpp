@@ -54,7 +54,7 @@ PairExcitedMap::~PairExcitedMap() {
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
-  int j,jj,jnum,itype,jtype,ih;
+  int j,jj,jnum,ih;
   double qtmp,delx,dely,delz,epair,fpair;
   double rsq,r2inv,rinv,factor_coul;
   int *jlist,*numneigh,**firstneigh;
@@ -79,7 +79,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int idH =atom->map(tagH);
   int idH0=atom->map(tagH0);
   int typeO=type[idO];
-  itype = type[idH];
 
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
@@ -142,7 +141,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
     dely = xH[1] - x[j][1];
     delz = xH[2] - x[j][2];
     rsq = delx*delx + dely*dely + delz*delz;
-    jtype = type[j];  //TODO: don't need to care about type?
 
     if (rsq < cut2) {
       qtmp=q[j];
@@ -181,13 +179,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
       //now compute field from hydrogens on that oxygen
       //TODO: probably faster to unroll this loop
-      for (ih=1; ih<3; ih++) { //TODO: are locals IDs in order OHH too?
+      for (ih=1; ih<3; ih++) { //TODO: locals IDs are not in order OHH!!
 	qtmp = q[j];
 	delx = xH[0] - x[j+ih][0];
 	dely = xH[1] - x[j+ih][1];
 	delz = xH[2] - x[j+ih][2];
 	rsq = delx*delx + dely*dely + delz*delz;
-	jtype = type[j];
 
 	r2inv = 1.0/rsq;
 	rinv = sqrt(r2inv);
@@ -223,6 +220,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
 			    (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
       }
     }
+    fprintf(screen,"%d %f %f %f\n",j,fI[idO][0],fI[idO][1],fI[idO][2]);
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
   eH *= qqrd2e; //energy/charge*length
