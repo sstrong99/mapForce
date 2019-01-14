@@ -3,3 +3,5 @@
 *.synctex.gz
 *.aux
 *.log
+dump.lammpstrj
+log.lammps
