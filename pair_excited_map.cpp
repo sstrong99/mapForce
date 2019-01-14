@@ -154,7 +154,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
       uhj[1]=dely*rinv;
       uhj[2]=delz*rinv;
 
-      eHtmp = qqrd2e * qtmp * r2inv;  //will convert to energy after loop
+      eHtmp = qtmp * r2inv;  //will convert to energy after loop
 
       //accumulate eH
       eHvec[0] += uhj[0]*eHtmp; 

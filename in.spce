@@ -8,8 +8,8 @@ variable	samp_rate 	equal 1
 variable	thermo_rate 	equal 1
 variable	Wlat		equal 3.1043  #for water density 1.0
 
-variable	equil		equal 10
-variable	run		equal 100
+variable	equil		equal 100
+variable	run		equal 1000
 
 variable	ts		equal 2.0
 variable	Tdamp		equal 100*${ts}
