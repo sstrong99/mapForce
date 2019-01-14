@@ -72,7 +72,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int ntotal = nlocal+nghost;
   double *special_coul = force->special_coul;
   int newton_pair = force->newton_pair;
-  double qqrd2e = force->qqrd2e;
+  double qqrd2e = force->qqrd2e; //convert q/r^2 to energy/r*e
 
   //get ids of excited molecule on this proc
   int idO =atom->map(tagO);
@@ -154,27 +154,26 @@ void PairExcitedMap::compute(int eflag, int vflag)
       uhj[1]=dely*rinv;
       uhj[2]=delz*rinv;
 
-      eHtmp = qqrd2e * qtmp * r2inv;
+      eHtmp = qqrd2e * qtmp * r2inv;  //will convert to energy after loop
 
       //accumulate eH
-      eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
+      eHvec[0] += uhj[0]*eHtmp; 
       eHvec[1] += uhj[1]*eHtmp;
       eHvec[2] += uhj[2]*eHtmp;
 
-      //TODO: do we need any unit conversions (qqrd2e, etc) here
       //get force vectors
-      qfact  = qtmp * r2inv;
-      tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
-      fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;
+      qfact  = qqrd2e * qtmp * r2inv; //energy/charge*length  = F/Q
+      tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2]; 
+      fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv; //F/Q*L
       fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
       fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);
+      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]); //F/Q*L
       fI[j][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
       fI[j][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
       fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
-			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );
+			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot ); //F/Q*L
       fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
 			  (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
       fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
@@ -198,28 +197,26 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	uhj[1]=dely*rinv;
 	uhj[2]=delz*rinv;
 
-	eHtmp = qqrd2e * qtmp * r2inv;
+	eHtmp = qtmp * r2inv;  //will convert to energy after loop
 
 	//accumulate eH
-	eHvec[0] += uhj[0]*eHtmp;  //has lammps units of force/charge
+	eHvec[0] += uhj[0]*eHtmp;  
 	eHvec[1] += uhj[1]*eHtmp;
 	eHvec[2] += uhj[2]*eHtmp;
 
 	//get force vectors
-	//TODO: it seems like there is an extra factor of L^-3 here
-	//maybe this is accounted for in mapA and mapB
-	qfact  = qtmp * r2inv;
+	qfact  = qqrd2e * qtmp * r2inv;  //energy/charge*length = F/Q
 	tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
-	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;
+	fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv;   //F/Q*L
 	fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
 	fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-	fI[j+ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);
+	fI[j+ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);  //F/Q*L
 	fI[j+ih][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
 	fI[j+ih][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
 	fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
-			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );
+			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );  //F/Q*L
 	fH[1] +=  qfact * ( oh[1]*rinv + uhj[1]*rOHinv -
 			    (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
 	fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
@@ -228,7 +225,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
     }
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
-  double mapBE = mapB * eH;
+  eH *= qqrd2e; //energy/charge*length
+  double mapBE = mapB * eH;  //charge*length: mapB=(charge*length)^2/energy
 
   //consolidate fO and fH into fI
   for (int ii=0; ii<3; ii++) {
@@ -246,11 +244,10 @@ void PairExcitedMap::compute(int eflag, int vflag)
     //factor_coul = special_coul[sbmask(j)];
     j &= NEIGHMASK;
 
+    //fI = force/charge*length
     f[j][0] += mapA*fI[j][0] + mapBE*fI[j][0];
     f[j][1] += mapA*fI[j][1] + mapBE*fI[j][1];
     f[j][2] += mapA*fI[j][2] + mapBE*fI[j][2];
-
-
   }
 
   //add force on excited H
@@ -260,7 +257,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   f[j][2] += fI[j][0];
 
   if (eflag)
-    epair = - mapA*eH - mapBE*eH/2;  //TODO: energy units?
+    epair = - mapA*eH - mapBE*eH/2;   //in lammps energy units
   //TODO: need to figure out virial if want to use pressure
   //if (evflag) ev_tally(i,j,nlocal,newton_pair,
   //			 0.0,epair,fpair,delx,dely,delz);
