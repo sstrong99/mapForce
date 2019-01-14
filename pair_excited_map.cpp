@@ -226,7 +226,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
   eH *= qqrd2e; //energy/charge*length
-  double mapBE = mapB * eH;  //charge*length: mapB=(charge*length)^2/energy
+  double mapC = mapA + mapB*eH;  //charge*length
 
   //consolidate fO and fH into fI
   for (int ii=0; ii<3; ii++) {
@@ -247,9 +247,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
     j &= NEIGHMASK;
 
     //fI = force/charge*length
-    fThis[0] = mapA*fI[j][0] + mapBE*fI[j][0];
-    fThis[1] = mapA*fI[j][1] + mapBE*fI[j][1];
-    fThis[2] = mapA*fI[j][2] + mapBE*fI[j][2];
+    fThis[0] = mapC*fI[j][0];
+    fThis[1] = mapC*fI[j][1];
+    fThis[2] = mapC*fI[j][2];
     
     f[j][0] += fThis[0];
     f[j][1] += fThis[1];
@@ -262,9 +262,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
   //add force on excited H
   j=idH;
-  fThis[0] = mapA*fI[j][0] + mapBE*fI[j][0];
-  fThis[1] = mapA*fI[j][1] + mapBE*fI[j][1];
-  fThis[2] = mapA*fI[j][2] + mapBE*fI[j][2];
+  fThis[0] = mapC*fI[j][0];
+  fThis[1] = mapC*fI[j][1];
+  fThis[2] = mapC*fI[j][2];
     
   f[j][0] += fThis[0];
   f[j][1] += fThis[1];
@@ -277,7 +277,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //TODO: fTot should be zero
 
   if (eflag)
-    epair = - mapA*eH - mapBE*eH/2;   //in lammps energy units
+    epair = - mapA*eH - mapB*eH*eH/2;   //in lammps energy units
   //TODO: need to figure out virial if want to use pressure
   //if (evflag) ev_tally(i,j,nlocal,newton_pair,
   //			 0.0,epair,fpair,delx,dely,delz);
