@@ -120,7 +120,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //TODO: can this proc add forces to ghost atoms?
   memory->create(fI,ntotal,3,"pairExcitedMap:forces");
   size_t nbytes = sizeof(double)*ntotal*3;
-  //TODO: not necessary, but could help to identify atoms with force
+  //TODO: not necessary to set to 0, but could help to identify atoms with force
   if (nbytes) memset(&fI[0][0],0.0,nbytes);
 
   //loop through neighs of H
@@ -238,6 +238,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
   // loop over neighbors of excited H and compute force due to eH
   // this should do all neighbors, but not itself
+  double fThis[3];
+  double fTot[3] = {0.0,0.0,0.0};
   for (jj = 0; jj < jnum; jj++) {
     j = jlist[jj];
 
@@ -245,16 +247,34 @@ void PairExcitedMap::compute(int eflag, int vflag)
     j &= NEIGHMASK;
 
     //fI = force/charge*length
-    f[j][0] += mapA*fI[j][0] + mapBE*fI[j][0];
-    f[j][1] += mapA*fI[j][1] + mapBE*fI[j][1];
-    f[j][2] += mapA*fI[j][2] + mapBE*fI[j][2];
+    fThis[0] = mapA*fI[j][0] + mapBE*fI[j][0];
+    fThis[1] = mapA*fI[j][1] + mapBE*fI[j][1];
+    fThis[2] = mapA*fI[j][2] + mapBE*fI[j][2];
+    
+    f[j][0] += fThis[0];
+    f[j][1] += fThis[1];
+    f[j][2] += fThis[2];
+
+    fTot[0] += fThis[0];
+    fTot[1] += fThis[1];
+    fTot[2] += fThis[2]; 
   }
 
   //add force on excited H
   j=idH;
-  f[j][0] += fI[j][0];
-  f[j][1] += fI[j][0];
-  f[j][2] += fI[j][0];
+  fThis[0] = mapA*fI[j][0] + mapBE*fI[j][0];
+  fThis[1] = mapA*fI[j][1] + mapBE*fI[j][1];
+  fThis[2] = mapA*fI[j][2] + mapBE*fI[j][2];
+    
+  f[j][0] += fThis[0];
+  f[j][1] += fThis[1];
+  f[j][2] += fThis[2];
+  
+  fTot[0] += fThis[0];
+  fTot[1] += fThis[1];
+  fTot[2] += fThis[2];
+
+  //TODO: fTot should be zero
 
   if (eflag)
     epair = - mapA*eH - mapBE*eH/2;   //in lammps energy units
