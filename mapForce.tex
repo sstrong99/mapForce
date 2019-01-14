@@ -204,5 +204,18 @@ q_\alpha \frac{ 3\vect{\hat r}_{\alpha H}(\vect{\hat r}_{\alpha H}\vect\cdot\vec
 \end{equation*}
 Here, the sums over $j$ go over all atoms within the cutoff, excluding the excited molecule.
 
+\section{Conservation}
+The total force on the system should be zero.
+\begin{align*}
+\sum_\alpha \vect F_\alpha =& \\
+=& \sum_j q_j \frac{ 3\vect{\hat r}_{j H}(\vect{\hat r}_{j H}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{OH}}{r_{j H}^3} + \sum_j q_j \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{jH}}{r_{jH}^2r_{OH}} \\
+&+ \sum_j q_j \frac{1}{r_{jH}^2} \left[\frac{\vect{\hat r}_{OH}}{r_{jH}} + \frac{\vect{\hat r}_{jH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right] \\
+=& \sum_j \frac{q_j}{r_{jH}^2} \left[ \frac{ 3\vect{\hat r}_{j H}(\vect{\hat r}_{j H}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{OH}}{r_{j H}} + \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH}) - \vect{\hat r}_{jH}}{r_{OH}} + \frac{\vect{\hat r}_{OH}}{r_{jH}} + \frac{\vect{\hat r}_{jH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right] \\
+=& \sum_j \frac{q_j}{r_{jH}^2} \left[ \frac{ 3\vect{\hat r}_{j H}(\vect{\hat r}_{j H}\vect\cdot\vect{\hat r}_{OH})}{r_{j H}} + \frac{ \vect{\hat r}_{OH}(\vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH})}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right) \vect{\hat r}_{jH}\vect\cdot\vect{\hat r}_{OH} \right] \\
+=& \sum_j \frac{q_j}{r_{jH}^2} \left[ \frac{ 3\vect{\hat r}_{j H}}{r_{j H}} + \frac{ \vect{\hat r}_{OH}}{r_{OH}} - \left(\frac{\vect{\hat r}_{OH}}{r_{OH}} +3\frac{\vect{\hat r}_{jH}}{r_{jH}}\right)  \right](\vect{\hat r}_{j H}\vect\cdot\vect{\hat r}_{OH}) \\
+=& \sum_j \frac{q_j}{r_{jH}^2} \left(0 \right)(\vect{\hat r}_{j H}\vect\cdot\vect{\hat r}_{OH}) \\
+=& 0
+\end{align*}
+
 
 \end{document}
