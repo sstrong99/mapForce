@@ -283,10 +283,10 @@ void PairExcitedMap::settings(int narg, char **arg)
   tagH = tagO+1; //this requires that hydrogen atoms always follow O
   tagH0= tagH+1;
 
-  //these should be input in lammps units of energy/efield (charge * length)
+  //these should be input in lammps units
   //we incorporate the negative sign and constants here
-  mapA = - force->numeric(FLERR,arg[2]);
-  mapB = -2 * force->numeric(FLERR,arg[3]);
+  mapA = - force->numeric(FLERR,arg[2]);  //charge*length
+  mapB = -2 * force->numeric(FLERR,arg[3]);  //(charge*length)^2/energy
 }
 
 /* ----------------------------------------------------------------------
