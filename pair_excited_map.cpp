@@ -29,6 +29,7 @@
 #include "neigh_list.h"
 #include "memory.h"
 #include "error.h"
+#include "domain.h"
 
 using namespace LAMMPS_NS;
 
@@ -81,13 +82,16 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int idH0=atom->map(tagH0);
   int typeO=type[idO];
 
+  //only compute forces if excited H is a local atom, not a ghost
+  //if (idH >= nlocal)
+  //  return;
+
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
 
-  //TODO: this assumes that idO,idH,and idH0 are always on this proc (id>-1)
-  //might be too expensive to test this every time
+  //TODO: this assumes that idO,idH,and idH0 are always on the same proc
   //should verify that it is ensured
-  if (idO==-1)
+  if (idH==-1)
     return;  //no relevant atoms on this proc, only in a very big simulation
 
   double *xO=x[idO];
@@ -96,6 +100,16 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[0] = xH[0] - xO[0];
   oh[1] = xH[1] - xO[1];
   oh[2] = xH[2] - xO[2];
+  domain->minimum_image(oh[0],oh[1],oh[2]);  //PBCs
+  //need PBCs maybe because these
+
+  //PBCs are accounted for in ghost communication
+  //test that here
+  //if (oh[0] > domain->xprd_half ||
+  //    oh[1] > domain->yprd_half ||
+  //    oh[2] > domain->zprd_half   )
+  //  error->one(FLERR,"OH vector crosses periodic boundary");
+
   double rOH=oh[0]*oh[0] + oh[1]*oh[1] + oh[2]*oh[2];
   rOH = sqrt(rOH);
   double rOHinv= 1.0/rOH;
@@ -114,7 +128,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double fO[3]    = {0.0,0.0,0.0};
   double fH[3]    = {0.0,0.0,0.0};
   double uhj[3];   //unit vector in j->H direction
-  //TODO: could compute one of these from the sum of the others
   double tmpdot,qfact,eHtmp;
   double **fI;
   //TODO: can this proc add forces to ghost atoms?
@@ -141,9 +154,18 @@ void PairExcitedMap::compute(int eflag, int vflag)
     delx = xH[0] - x[j][0];
     dely = xH[1] - x[j][1];
     delz = xH[2] - x[j][2];
+    domain->minimum_image(delx,dely,delz);
     rsq = delx*delx + dely*dely + delz*delz;
 
+    //PBCs are accounted for in ghost communication
+    //test that here
+    //if (delx > domain->xprd_half ||
+    //dely > domain->yprd_half ||
+    //delz > domain->zprd_half   )
+    //error->one(FLERR,"Hj vector crosses periodic boundary");
+
     if (rsq < cut2) {
+
       qtmp=q[j];
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
@@ -156,13 +178,13 @@ void PairExcitedMap::compute(int eflag, int vflag)
       eHtmp = qtmp * r2inv;  //will convert to energy after loop
 
       //accumulate eH
-      eHvec[0] += uhj[0]*eHtmp; 
+      eHvec[0] += uhj[0]*eHtmp;
       eHvec[1] += uhj[1]*eHtmp;
       eHvec[2] += uhj[2]*eHtmp;
 
       //get force vectors
       qfact  = qtmp * r2inv;  //will convert after loop for efficiency
-      tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2]; 
+      tmpdot = uhj[0]*oh[0] + uhj[1]*oh[1] + uhj[2]*oh[2];
       fO[0] += qfact * ( oh[0]*tmpdot - uhj[0] ) * rOHinv; //Q/L^3
       fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
       fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
@@ -184,11 +206,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	ih = atom->map(tag[j] + iih);  //get local id of next H atom
 	if (ih==-1)
           error->one(FLERR,"hydrogen is missing");
-	
+
 	qtmp = q[ih];
 	delx = xH[0] - x[ih][0];
 	dely = xH[1] - x[ih][1];
 	delz = xH[2] - x[ih][2];
+	domain->minimum_image(delx,dely,delz);
 	rsq = delx*delx + dely*dely + delz*delz;
 
 	r2inv = 1.0/rsq;
@@ -202,7 +225,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	eHtmp = qtmp * r2inv;  //will convert to energy after loop
 
 	//accumulate eH
-	eHvec[0] += uhj[0]*eHtmp;  
+	eHvec[0] += uhj[0]*eHtmp;
 	eHvec[1] += uhj[1]*eHtmp;
 	eHvec[2] += uhj[2]*eHtmp;
 
@@ -254,14 +277,14 @@ void PairExcitedMap::compute(int eflag, int vflag)
     fThis[0] = mapC*fI[j][0];
     fThis[1] = mapC*fI[j][1];
     fThis[2] = mapC*fI[j][2];
-    
+
     f[j][0] += fThis[0];
     f[j][1] += fThis[1];
     f[j][2] += fThis[2];
 
     fTot[0] += fThis[0];
     fTot[1] += fThis[1];
-    fTot[2] += fThis[2]; 
+    fTot[2] += fThis[2];
   }
 
   //add force on excited H
@@ -269,11 +292,11 @@ void PairExcitedMap::compute(int eflag, int vflag)
   fThis[0] = mapC*fI[j][0];
   fThis[1] = mapC*fI[j][1];
   fThis[2] = mapC*fI[j][2];
-    
+
   f[j][0] += fThis[0];
   f[j][1] += fThis[1];
   f[j][2] += fThis[2];
-  
+
   fTot[0] += fThis[0];
   fTot[1] += fThis[1];
   fTot[2] += fThis[2];
