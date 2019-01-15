@@ -87,10 +87,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
     error->one(FLERR,"excited O atom has the wrong type");
 
   //only compute forces if excited H is a local atom, not a ghost
-  if (idH >= nlocal) {
-    fprintf(screen,"WARNING: excited H is a ghost atom");
+  if (idH >= nlocal)
     return;
-  }
 
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
@@ -106,11 +104,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[0] = xH[0] - xO[0];
   oh[1] = xH[1] - xO[1];
   oh[2] = xH[2] - xO[2];
-  //domain->minimum_image(oh[0],oh[1],oh[2]);  //PBCs
-  //need PBCs maybe because these
 
   //PBCs are accounted for in ghost communication
-  //test that here
+  //but test here to make sure
   if (oh[0] > domain->xprd_half ||
       oh[1] > domain->yprd_half ||
       oh[2] > domain->zprd_half   )
@@ -144,7 +140,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
   //loop through neighs of H
   //for (jj = 0; jj < jnum; jj++) {
-  //  j = jlist[jj];
+  //j = jlist[jj];
   for (j=0; j<ntotal; j++) {
 
     //exclude same molecule from contributing to eH
@@ -319,6 +315,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //this neglects the constant term in the map energy
   if (eflag)
     epair = - mapA*eH - mapB*eH*eH/2;   //in lammps energy units
+
   //TODO: need to figure out virial if want to use pressure
   //if (evflag) ev_tally(i,j,nlocal,newton_pair,
   //			 0.0,epair,fpair,delx,dely,delz);
