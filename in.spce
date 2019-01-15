@@ -8,8 +8,9 @@ variable	samp_rate 	equal 1
 variable	thermo_rate 	equal 1
 variable	Wlat		equal 3.1043  #for water density 1.0
 
-variable	equil		equal 100
-variable	run		equal 1000
+variable	equil		equal 10
+variable	run		equal 100
+variable	test		equal 1000
 
 variable	ts		equal 2.0
 variable	Tdamp		equal 100*${ts}
@@ -101,10 +102,6 @@ run 		${equil}
 #############################################################################
 #run at NPT
 
-#dump positions only in first batch run
-dump 		7 all custom ${samp_rate} dump.lammpstrj id x y z type
-dump_modify	7 sort id
-
 run 		${run}
 
 ##############################################################################
@@ -116,7 +113,7 @@ variable        mapA  equal -5060.4*${convA}
 variable        mapB  equal -86225*${convB}
 
 pair_style 	hybrid/overlay lj/cut/coul/long 9.0 &
-		excited/map 7.831 1 ${mapA} ${mapB}
+		excited/map 7.831 1 388 ${mapA} ${mapB}
 pair_modify 	table 0 table/disp 0 shift yes
 
 pair_coeff 	* * lj/cut/coul/long 0.0 0.0
@@ -126,8 +123,12 @@ pair_coeff      * * excited/map
 #############################################################################
 #run at NVT
 
+#dump positions only in first batch run
+dump 		7 all custom ${samp_rate} dump.lammpstrj id x y z type
+dump_modify	7 sort id
+
 unfix           1
 fix 		2 all nvt temp ${myT} ${myT} ${Tdamp}
 fix_modify	2 energy yes
 
-run 		${run}
+run 		${test}
