@@ -44,6 +44,7 @@ class PairExcitedMap : public Pair {
  protected:
   double cut_global,cut2;
   tagint tagO,tagH,tagH0;       //ids of excited chromophore; H0=non-excited H
+  int typeO;
   double mapA,mapB;             //coefficients of map energy (a*E + b*E^2)
 
   virtual void allocate();

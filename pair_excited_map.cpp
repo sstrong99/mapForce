@@ -12,7 +12,7 @@
 //Written by Steven E Strong, based on pair_coul_cut.cpp
 
 //input file syntax is:
-//pair_style excited/map cutoff idO mapA mapB
+//pair_style excited/map cutoff typeO idO mapA mapB
 //no pair_coeff command should be used
 //water molecules must be in order OHH OHH ...
 ------------------------------------------------------------------------- */
@@ -77,14 +77,20 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double qqrd2e = force->qqrd2e; //convert q/r^2 to energy/r*e
 
   //get ids of excited molecule on this proc
-  int idO =atom->map(tagO);
+
   int idH =atom->map(tagH);
-  int idH0=atom->map(tagH0);
-  int typeO=type[idO];
+  int idO =atom->map(tagO);
+  idO = domain->closest_image(idH,idO);
+  int idH0=atom->map(tagH0); //TODO: prob don't need to track idH0
+  idH0 = domain->closest_image(idO,idH0);
+  if (type[idO]!=typeO)
+    error->one(FLERR,"excited O atom has the wrong type");
 
   //only compute forces if excited H is a local atom, not a ghost
-  //if (idH >= nlocal)
-  //  return;
+  if (idH >= nlocal) {
+    fprintf(screen,"WARNING: excited H is a ghost atom");
+    return;
+  }
 
   //because neighbor list includes everything within cutoff,
   //don't need to worry about communicating E field
@@ -100,15 +106,15 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[0] = xH[0] - xO[0];
   oh[1] = xH[1] - xO[1];
   oh[2] = xH[2] - xO[2];
-  domain->minimum_image(oh[0],oh[1],oh[2]);  //PBCs
+  //domain->minimum_image(oh[0],oh[1],oh[2]);  //PBCs
   //need PBCs maybe because these
 
   //PBCs are accounted for in ghost communication
   //test that here
-  //if (oh[0] > domain->xprd_half ||
-  //    oh[1] > domain->yprd_half ||
-  //    oh[2] > domain->zprd_half   )
-  //  error->one(FLERR,"OH vector crosses periodic boundary");
+  if (oh[0] > domain->xprd_half ||
+      oh[1] > domain->yprd_half ||
+      oh[2] > domain->zprd_half   )
+    error->one(FLERR,"OH vector crosses periodic boundary");
 
   double rOH=oh[0]*oh[0] + oh[1]*oh[1] + oh[2]*oh[2];
   rOH = sqrt(rOH);
@@ -137,35 +143,32 @@ void PairExcitedMap::compute(int eflag, int vflag)
   if (nbytes) memset(&fI[0][0],0.0,nbytes);
 
   //loop through neighs of H
-  for (jj = 0; jj < jnum; jj++) {
-    j = jlist[jj];
+  //for (jj = 0; jj < jnum; jj++) {
+  //  j = jlist[jj];
+  for (j=0; j<ntotal; j++) {
 
     //exclude same molecule from contributing to eH
-    factor_coul = special_coul[sbmask(j)];
-    if (factor_coul==0.0)
-      continue;
+    //factor_coul = special_coul[sbmask(j)];
+    //if (factor_coul==0.0)
+    //  continue;
+
 
     //filters out bits that encode special neighbors
-    j &= NEIGHMASK;
+    //j &= NEIGHMASK;
 
     if (type[j]!=typeO)  //only test cutoff wrt O
+      continue;
+    if (j==idO) //skip same molec
       continue;
 
     delx = xH[0] - x[j][0];
     dely = xH[1] - x[j][1];
     delz = xH[2] - x[j][2];
-    domain->minimum_image(delx,dely,delz);
+    //PBCs are accounted for in ghost communication
+    //domain->minimum_image(delx,dely,delz);
     rsq = delx*delx + dely*dely + delz*delz;
 
-    //PBCs are accounted for in ghost communication
-    //test that here
-    //if (delx > domain->xprd_half ||
-    //dely > domain->yprd_half ||
-    //delz > domain->zprd_half   )
-    //error->one(FLERR,"Hj vector crosses periodic boundary");
-
     if (rsq < cut2) {
-
       qtmp=q[j];
       r2inv = 1.0/rsq;
       rinv = sqrt(r2inv);
@@ -206,13 +209,19 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	ih = atom->map(tag[j] + iih);  //get local id of next H atom
 	if (ih==-1)
           error->one(FLERR,"hydrogen is missing");
+	ih = domain->closest_image(j,ih);
 
 	qtmp = q[ih];
 	delx = xH[0] - x[ih][0];
 	dely = xH[1] - x[ih][1];
 	delz = xH[2] - x[ih][2];
-	domain->minimum_image(delx,dely,delz);
 	rsq = delx*delx + dely*dely + delz*delz;
+
+	//is it possible for an O atom to be inside cutoff, but not H?
+	if (delx > domain->xprd_half ||
+	    dely > domain->yprd_half ||
+	    delz > domain->zprd_half   )
+	  error->one(FLERR,"Hj vector crosses periodic boundary");
 
 	r2inv = 1.0/rsq;
 	rinv = sqrt(r2inv);
@@ -267,11 +276,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
   // this should do all neighbors, but not itself
   double fThis[3];
   double fTot[3] = {0.0,0.0,0.0};
-  for (jj = 0; jj < jnum; jj++) {
-    j = jlist[jj];
+  //for (jj = 0; jj < jnum; jj++) {
+  //  j = jlist[jj];
+  for (j=0; j<ntotal; j++) {
 
     //factor_coul = special_coul[sbmask(j)];
-    j &= NEIGHMASK;
+  //  j &= NEIGHMASK;
 
     //fI = force/charge*length
     fThis[0] = mapC*fI[j][0];
@@ -288,22 +298,25 @@ void PairExcitedMap::compute(int eflag, int vflag)
   }
 
   //add force on excited H
-  j=idH;
-  fThis[0] = mapC*fI[j][0];
-  fThis[1] = mapC*fI[j][1];
-  fThis[2] = mapC*fI[j][2];
+  //j=idH;
+  //fThis[0] = mapC*fI[j][0];
+  //fThis[1] = mapC*fI[j][1];
+  //fThis[2] = mapC*fI[j][2];
 
-  f[j][0] += fThis[0];
-  f[j][1] += fThis[1];
-  f[j][2] += fThis[2];
+//  f[j][0] += fThis[0];
+  //f[j][1] += fThis[1];
+  //f[j][2] += fThis[2];
 
-  fTot[0] += fThis[0];
-  fTot[1] += fThis[1];
-  fTot[2] += fThis[2];
+//  fTot[0] += fThis[0];
+  //fTot[1] += fThis[1];
+  //fTot[2] += fThis[2];
 
   //TODO: fTot should be zero
-  fprintf(screen,"%f %f %f\n",fTot[0],fTot[1],fTot[2]);
+  if (fabs(fTot[0]) > 1e-15 || fabs(fTot[1]) > 1e-15 || fabs(fTot[2]) > 1e-15 )
+      error->one(FLERR,"total force is non-zero");
+  //fprintf(screen,"%e %e %e\n",fTot[0],fTot[1],fTot[2]);
 
+  //this neglects the constant term in the map energy
   if (eflag)
     epair = - mapA*eH - mapB*eH*eH/2;   //in lammps energy units
   //TODO: need to figure out virial if want to use pressure
@@ -322,19 +335,20 @@ void PairExcitedMap::compute(int eflag, int vflag)
 
 void PairExcitedMap::settings(int narg, char **arg)
 {
-  if (narg != 4) error->all(FLERR,"Illegal pair_style command");
+  if (narg != 5) error->all(FLERR,"Illegal pair_style command");
 
   cut_global = force->numeric(FLERR,arg[0]);
   cut2 = cut_global*cut_global;
 
-  tagO = force->inumeric(FLERR,arg[1]);
+  typeO= force->inumeric(FLERR,arg[1]);
+  tagO = force->inumeric(FLERR,arg[2]);
   tagH = tagO+1; //this requires that hydrogen atoms always follow O
   tagH0= tagH+1;
 
   //these should be input in lammps units
   //we incorporate the negative sign and constants here
-  mapA = - force->numeric(FLERR,arg[2]);  //charge*length
-  mapB = -2 * force->numeric(FLERR,arg[3]);  //(charge*length)^2/energy
+  mapA = - force->numeric(FLERR,arg[3]);  //charge*length
+  mapB = -2 * force->numeric(FLERR,arg[4]);  //(charge*length)^2/energy
 }
 
 /* ----------------------------------------------------------------------
