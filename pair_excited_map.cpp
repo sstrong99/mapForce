@@ -312,7 +312,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //fTot[2] += fThis[2];
 
   //TODO: fTot should be zero
-  if (fabs(fTot[0]) > 1e-15 || fabs(fTot[1]) > 1e-15 || fabs(fTot[2]) > 1e-15 )
+  if (fabs(fTot[0]) > 1e-14 || fabs(fTot[1]) > 1e-14 || fabs(fTot[2]) > 1e-14 )
       error->one(FLERR,"total force is non-zero");
   //fprintf(screen,"%e %e %e\n",fTot[0],fTot[1],fTot[2]);
 
