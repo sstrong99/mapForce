@@ -10,7 +10,7 @@ variable	Wlat		equal 3.1043  #for water density 1.0
 
 variable	equil		equal 10
 variable	run		equal 100
-variable	test		equal 1000
+variable	test		equal 100
 
 variable	ts		equal 2.0
 variable	Tdamp		equal 100*${ts}
@@ -124,7 +124,7 @@ pair_coeff      * * excited/map
 #run at NVT
 
 #dump positions only in first batch run
-dump 		7 all custom ${samp_rate} dump.lammpstrj id x y z type
+dump 		7 all custom ${samp_rate} dump.lammpstrj id x y z fx fy fz type
 dump_modify	7 sort id
 
 unfix           1

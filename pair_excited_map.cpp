@@ -139,18 +139,17 @@ void PairExcitedMap::compute(int eflag, int vflag)
   if (nbytes) memset(&fI[0][0],0.0,nbytes);
 
   //loop through neighs of H
-  //for (jj = 0; jj < jnum; jj++) {
-  //j = jlist[jj];
-  for (j=0; j<ntotal; j++) {
+  for (jj = 0; jj < jnum; jj++) {
+  j = jlist[jj];
+//  for (j=0; j<ntotal; j++) {
 
     //exclude same molecule from contributing to eH
     //factor_coul = special_coul[sbmask(j)];
-    //if (factor_coul==0.0)
-    //  continue;
-
+    if (factor_coul==0.0)
+      continue;
 
     //filters out bits that encode special neighbors
-    //j &= NEIGHMASK;
+    j &= NEIGHMASK;
 
     if (type[j]!=typeO)  //only test cutoff wrt O
       continue;
@@ -273,11 +272,11 @@ void PairExcitedMap::compute(int eflag, int vflag)
   double fThis[3];
   double fTot[3] = {0.0,0.0,0.0};
   //for (jj = 0; jj < jnum; jj++) {
-  //  j = jlist[jj];
-  for (j=0; j<ntotal; j++) {
+  //j = jlist[jj];
+    for (j=0; j<ntotal; j++) {
 
     //factor_coul = special_coul[sbmask(j)];
-  //  j &= NEIGHMASK;
+    //j &= NEIGHMASK;
 
     //fI = force/charge*length
     fThis[0] = mapC*fI[j][0];
@@ -294,23 +293,26 @@ void PairExcitedMap::compute(int eflag, int vflag)
   }
 
   //add force on excited H
-  //j=idH;
-  //fThis[0] = mapC*fI[j][0];
-  //fThis[1] = mapC*fI[j][1];
-  //fThis[2] = mapC*fI[j][2];
+  // j=idH;
+  // fThis[0] = mapC*fI[j][0];
+  // fThis[1] = mapC*fI[j][1];
+  // fThis[2] = mapC*fI[j][2];
 
-//  f[j][0] += fThis[0];
-  //f[j][1] += fThis[1];
-  //f[j][2] += fThis[2];
+  // f[j][0] += fThis[0];
+  // f[j][1] += fThis[1];
+  // f[j][2] += fThis[2];
 
-//  fTot[0] += fThis[0];
-  //fTot[1] += fThis[1];
-  //fTot[2] += fThis[2];
+  // fTot[0] += fThis[0];
+  // fTot[1] += fThis[1];
+  // fTot[2] += fThis[2];
 
   //TODO: fTot should be zero
-  if (fabs(fTot[0]) > 1e-14 || fabs(fTot[1]) > 1e-14 || fabs(fTot[2]) > 1e-14 )
-      error->one(FLERR,"total force is non-zero");
-  //fprintf(screen,"%e %e %e\n",fTot[0],fTot[1],fTot[2]);
+  if (fabs(fTot[0]) > 1e-14 ||
+      fabs(fTot[1]) > 1e-14 ||
+      fabs(fTot[2]) > 1e-14   ) {
+    fprintf(screen,"%e %e %e\n",fTot[0],fTot[1],fTot[2]);
+    error->one(FLERR,"total force is non-zero");
+  }
 
   //this neglects the constant term in the map energy
   if (eflag)
