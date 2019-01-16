@@ -42,18 +42,14 @@ class PairExcitedMap : public Pair {
   virtual void read_restart_settings(FILE *) {};
 
  protected:
-  int *listO;                    //list of ids
   double **fI;
-  int *indF;
-  int oneatom;
+  int     *indF;
   double cut_global,cut2;
   tagint tagO,tagH,tagH0;       //ids of excited chromophore; H0=non-excited H
   int typeO;
   double mapA,mapB;             //coefficients of map energy (a*E + b*E^2)
 
   virtual void allocate();
-
-  int getNeighs(const int idH,int *mylist);
 };
 
 }
