@@ -60,10 +60,9 @@ PairExcitedMap::~PairExcitedMap() {
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
-  int j,jj,jnum,ih,iih;
+  int j,jj,ih,iih;
   double qtmp,delx,dely,delz,epair,fpair;
   double rsq,r2inv,rinv,factor_coul;
-  int *jlist,*numneigh,**firstneigh;
 
   epair = 0.0;
   if (eflag || vflag) ev_setup(eflag,vflag);
@@ -77,12 +76,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int nlocal = atom->nlocal;
   int nghost = atom->nghost;
   int ntotal = nlocal+nghost;
-  double *special_coul = force->special_coul;
-  int newton_pair = force->newton_pair;
-  double qqrd2e = force->qqrd2e; //convert q/r^2 to energy/r*e
 
   //get ids of excited molecule on this proc
-
   int idH =atom->map(tagH);
   int idO =atom->map(tagO);
   idO = domain->closest_image(idH,idO);
@@ -109,25 +104,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[1] = xH[1] - xO[1];
   oh[2] = xH[2] - xO[2];
 
-  //PBCs are accounted for in ghost communication
-  //but test here to make sure
-  if (oh[0] > domain->xprd_half ||
-      oh[1] > domain->yprd_half ||
-      oh[2] > domain->zprd_half   )
-    error->one(FLERR,"OH vector crosses periodic boundary");
-
   double rOH=oh[0]*oh[0] + oh[1]*oh[1] + oh[2]*oh[2];
   rOH = sqrt(rOH);
   double rOHinv= 1.0/rOH;
   oh[0] *= rOHinv; //normalize
   oh[1] *= rOHinv;
   oh[2] *= rOHinv;
-
-  //neighbor list info
-  numneigh = list->numneigh;
-  firstneigh = list->firstneigh;
-  jlist = firstneigh[idH];
-  jnum = numneigh[idH];
 
   //compute electric field at H, and calculate derivative components
   double eHvec[3] = {0.0,0.0,0.0};
@@ -239,9 +221,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
     }
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
-  eH *= qqrd2e; //energy/charge*length
+  eH *= force->qqrd2e; //energy/charge*length
   double mapC = mapA + mapB*eH;  //charge*length
-  mapC *= qqrd2e; //convert Q/L^3 to E/QL^2 and to F
+  mapC *= force->qqrd2e; //convert Q/L^3 to E/QL^2 and to F
 
   //test that no forces already added to excited molecule
   for (int ii=0; ii<count; ii++)
