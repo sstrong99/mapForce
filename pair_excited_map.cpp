@@ -44,6 +44,12 @@ PairExcitedMap::PairExcitedMap(LAMMPS *lmp) : Pair(lmp) {
   ewaldflag = pppmflag = msmflag = dipoleflag = 1;
   if (!force->newton)
     error->all(FLERR,"Newton's 3rd law must be enabled to add forces to ghost atoms");
+
+  //init arrays
+  oneatom=neighbor->oneatom;
+  memory->create(listO,oneatom,"pairExcitedMap:neigh list");
+  memory->create(fI,oneatom,3,"pairExcitedMap:forces");
+  memory->create(indF,oneatom,"pairExcitedMap:forceInds");
 }
 
 PairExcitedMap::~PairExcitedMap() {
@@ -51,14 +57,16 @@ PairExcitedMap::~PairExcitedMap() {
     memory->destroy(setflag);
     memory->destroy(cutsq);
   }
+  memory->destroy(listO);
+  memory->destroy(fI);
+  memory->destroy(indF);
 }
 
 void PairExcitedMap::compute(int eflag, int vflag)
 {
   int j,jj,jnum,ih,iih;
   double qtmp,delx,dely,delz,epair,fpair;
-  double rsq,r2inv,rinv,factor_coul;
-  int *jlist,*numneigh,**firstneigh;
+  double rsq,r2inv,rinv;
 
   epair = 0.0;
   if (eflag || vflag) ev_setup(eflag,vflag);
@@ -72,12 +80,8 @@ void PairExcitedMap::compute(int eflag, int vflag)
   int nlocal = atom->nlocal;
   int nghost = atom->nghost;
   int ntotal = nlocal+nghost;
-  double *special_coul = force->special_coul;
-  int newton_pair = force->newton_pair;
-  double qqrd2e = force->qqrd2e; //convert q/r^2 to energy/r*e
 
   //get ids of excited molecule on this proc
-
   int idH =atom->map(tagH);
   int idO =atom->map(tagO);
   idO = domain->closest_image(idH,idO);
@@ -86,12 +90,11 @@ void PairExcitedMap::compute(int eflag, int vflag)
   if (type[idO]!=typeO)
     error->one(FLERR,"excited O atom has the wrong type");
 
+  //because neighbor list includes everything within cutoff,
+  //don't need to worry about communicating E field
   //only compute forces if excited H is a local atom, not a ghost
   if (idH >= nlocal)
     return;
-
-  //because neighbor list includes everything within cutoff,
-  //don't need to worry about communicating E field
 
   //TODO: this assumes that idO,idH,and idH0 are always on the same proc
   //should verify that it is ensured
@@ -119,48 +122,24 @@ void PairExcitedMap::compute(int eflag, int vflag)
   oh[1] *= rOHinv;
   oh[2] *= rOHinv;
 
-  //neighbor list info
-  numneigh = list->numneigh;
-  firstneigh = list->firstneigh;
-  jlist = firstneigh[idH];
-  jnum = numneigh[idH];
-
   //compute electric field at H, and calculate derivative components
   double eHvec[3] = {0.0,0.0,0.0};
   double fO[3]    = {0.0,0.0,0.0};
   double fH[3]    = {0.0,0.0,0.0};
   double uhj[3];   //unit vector in j->H direction
   double tmpdot,qfact,eHtmp;
-  double **fI;
-  //TODO: can this proc add forces to ghost atoms?
-  memory->create(fI,ntotal,3,"pairExcitedMap:forces");
-  size_t nbytes = sizeof(double)*ntotal*3;
-  //TODO: not necessary to set to 0, but could help to identify atoms with force
-  if (nbytes) memset(&fI[0][0],0.0,nbytes);
 
-  //loop through neighs of H
+  //get neigbor oxygens of excited H
+  jnum=getNeighs(idH,listO);
+
+  //loop through oxygen neighs of H, keeping list of forces to add
+  int count=0;
   for (jj = 0; jj < jnum; jj++) {
-  j = jlist[jj];
-//  for (j=0; j<ntotal; j++) {
-
-    //exclude same molecule from contributing to eH
-    //factor_coul = special_coul[sbmask(j)];
-    if (factor_coul==0.0)
-      continue;
-
-    //filters out bits that encode special neighbors
-    j &= NEIGHMASK;
-
-    if (type[j]!=typeO)  //only test cutoff wrt O
-      continue;
-    if (j==idO) //skip same molec
-      continue;
+    j = listO[jj]; //already removed special neighbor bits in getNeighs()
 
     delx = xH[0] - x[j][0];
     dely = xH[1] - x[j][1];
     delz = xH[2] - x[j][2];
-    //PBCs are accounted for in ghost communication
-    //domain->minimum_image(delx,dely,delz);
     rsq = delx*delx + dely*dely + delz*delz;
 
     if (rsq < cut2) {
@@ -187,9 +166,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
       fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
       fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-      fI[j][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]); //Q/L^3
-      fI[j][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
-      fI[j][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
+      fI[count][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]); //Q/L^3
+      fI[count][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
+      fI[count][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
       fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
 			  (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot ); //Q/L^3
@@ -198,12 +177,14 @@ void PairExcitedMap::compute(int eflag, int vflag)
       fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
 			  (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
 
+      indF[count++]=j;
+
       //now compute field from hydrogens on that oxygen
       //TODO: probably faster to unroll this loop
       for (iih=1; iih<3; iih++) {
 	ih = atom->map(tag[j] + iih);  //get local id of next H atom
 	if (ih==-1)
-          error->one(FLERR,"hydrogen is missing");
+	  error->one(FLERR,"hydrogen is missing");
 	ih = domain->closest_image(j,ih);
 
 	qtmp = q[ih];
@@ -211,13 +192,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	dely = xH[1] - x[ih][1];
 	delz = xH[2] - x[ih][2];
 	rsq = delx*delx + dely*dely + delz*delz;
-
-	//is it possible for an O atom to be inside cutoff, but not H?
-	if (delx > domain->xprd_half ||
-	    dely > domain->yprd_half ||
-	    delz > domain->zprd_half   )
-	  error->one(FLERR,"Hj vector crosses periodic boundary");
-
 	r2inv = 1.0/rsq;
 	rinv = sqrt(r2inv);
 
@@ -240,9 +214,9 @@ void PairExcitedMap::compute(int eflag, int vflag)
 	fO[1] += qfact * ( oh[1]*tmpdot - uhj[1] ) * rOHinv;
 	fO[2] += qfact * ( oh[2]*tmpdot - uhj[2] ) * rOHinv;
 
-	fI[ih][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);  //Q/L^3
-	fI[ih][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
-	fI[ih][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
+	fI[count][0] = qfact * rinv * (3*uhj[0]*tmpdot - oh[0]);  //Q/L^3
+	fI[count][1] = qfact * rinv * (3*uhj[1]*tmpdot - oh[1]);
+	fI[count][2] = qfact * rinv * (3*uhj[2]*tmpdot - oh[2]);
 
 	fH[0] +=  qfact * ( oh[0]*rinv + uhj[0]*rOHinv -
 			    (oh[0]*rOHinv + 3*uhj[0]*rinv)*tmpdot );  //Q/L^3
@@ -250,38 +224,42 @@ void PairExcitedMap::compute(int eflag, int vflag)
 			    (oh[1]*rOHinv + 3*uhj[1]*rinv)*tmpdot );
 	fH[2] +=  qfact * ( oh[2]*rinv + uhj[2]*rOHinv -
 			    (oh[2]*rOHinv + 3*uhj[2]*rinv)*tmpdot );
+
+	indF[count++]=ih;
       }
     }
   }
   double eH = eHvec[0]*oh[0] + eHvec[1]*oh[1] + eHvec[2]*oh[2];
-  eH *= qqrd2e; //energy/charge*length
+  eH *= force->qqrd2e; //energy/charge*length
   double mapC = mapA + mapB*eH;  //charge*length
-  mapC *= qqrd2e; //convert Q/L^3 to E/QL^2 and to F
+  mapC *= force->qqrd2e; //convert Q/L^3 to E/QL^2 and to F
+
+  //test that no forces already added to excited molecule
+  for (int ii=0; ii<count; ii++)
+    if (indF[ii]==idH || indF[ii]==idH0 || indF[ii]==idO )
+      error->one(FLERR,"forces are being added to the excited molecule");
 
   //consolidate fO and fH into fI
+  indF[count]=idH;
+  indF[count+1]=idO;
   for (int ii=0; ii<3; ii++) {
-    //TODO: this test should be unnecessary
-    if ( fI[idO][ii] || fI[idH][ii] || fI[idH0][ii] )
-      error->one(FLERR,"forces are being added to the excited molecule");
-    fI[idO][ii]=fO[ii];
-    fI[idH][ii]=fH[ii];
+    fI[count][ii]=fH[ii];
+    fI[count+1][ii]=fO[ii];
   }
+  count+=2;
 
   // loop over neighbors of excited H and compute force due to eH
   // this should do all neighbors, but not itself
   double fThis[3];
   double fTot[3] = {0.0,0.0,0.0};
-  //for (jj = 0; jj < jnum; jj++) {
-  //j = jlist[jj];
-    for (j=0; j<ntotal; j++) {
-
-    //factor_coul = special_coul[sbmask(j)];
-    //j &= NEIGHMASK;
+  //loop through neighs of H
+  for (jj = 0; jj < count; jj++) {
+    j = indF[jj];
 
     //fI = force/charge*length
-    fThis[0] = mapC*fI[j][0];
-    fThis[1] = mapC*fI[j][1];
-    fThis[2] = mapC*fI[j][2];
+    fThis[0] = mapC*fI[jj][0];
+    fThis[1] = mapC*fI[jj][1];
+    fThis[2] = mapC*fI[jj][2];
 
     f[j][0] += fThis[0];
     f[j][1] += fThis[1];
@@ -291,20 +269,6 @@ void PairExcitedMap::compute(int eflag, int vflag)
     fTot[1] += fThis[1];
     fTot[2] += fThis[2];
   }
-
-  //add force on excited H
-  // j=idH;
-  // fThis[0] = mapC*fI[j][0];
-  // fThis[1] = mapC*fI[j][1];
-  // fThis[2] = mapC*fI[j][2];
-
-  // f[j][0] += fThis[0];
-  // f[j][1] += fThis[1];
-  // f[j][2] += fThis[2];
-
-  // fTot[0] += fThis[0];
-  // fTot[1] += fThis[1];
-  // fTot[2] += fThis[2];
 
   //TODO: fTot should be zero
   if (fabs(fTot[0]) > 1e-14 ||
@@ -321,10 +285,7 @@ void PairExcitedMap::compute(int eflag, int vflag)
   //TODO: need to figure out virial if want to use pressure
   //if (evflag) ev_tally(i,j,nlocal,newton_pair,
   //			 0.0,epair,fpair,delx,dely,delz);
-
-  memory->destroy(fI);
-
-  if (vflag_fdotr) virial_fdotr_compute();
+  //if (vflag_fdotr) virial_fdotr_compute();
 }
 
 /* ----------------------------------------------------------------------
@@ -447,4 +408,51 @@ void PairExcitedMap::allocate() {
     }
 
   allocated=1;
+}
+
+int PairExcitedMap::getNeighs(const int idH,int *mylist) {
+
+  int i,j,ii,jj,inum,jnum;
+  int *ilist,*jlist,*numneigh,**firstneigh;
+  double *special_coul = force->special_coul;
+  int *type = atom->type;
+  double factor_coul;
+
+  inum = list->inum;
+  ilist = list->ilist;
+  numneigh = list->numneigh;
+  firstneigh = list->firstneigh;
+
+
+  int count=0;
+  for (ii = 0; ii < inum; ii++) {
+    i = ilist[ii];
+    jlist = firstneigh[i];
+    jnum = numneigh[i];
+
+    for (jj = 0; jj < jnum; jj++) {
+      j = jlist[jj];
+
+      //don't include same molecule in neighbor list
+      factor_coul = special_coul[sbmask(j)];
+      if (factor_coul==0.0)
+	continue;
+      j &= NEIGHMASK;
+
+      if (type[j]!=typeO)
+	continue;
+
+      if (i==idH) {
+	mylist[count++]=j;
+	if (count == oneatom-2) //need 2 extra spaces for excited H and O
+	  error->one(FLERR,"excited H atom has too many neighbors");
+      } else if (j==idH) {
+	mylist[count++]=i;
+	if (count == oneatom-2)
+	  error->one(FLERR,"excited H atom has too many neighbors");
+      }
+    }
+  }
+
+  return count;
 }
