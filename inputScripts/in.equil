@@ -1,0 +1,7 @@
+#equilibrate bulk water with NVT
+
+fix 		1 all nvt temp ${myT} ${myT} ${Tdamp}
+fix_modify	1 energy yes
+
+run 		${equil}
+velocity all scale ${myT}

@@ -1,0 +1,9 @@
+#switch to excited state potential
+
+pair_style 	hybrid/overlay lj/cut/coul/long 9.0 &
+		excited/map 7.831 1 1 ${mapAc} ${mapBc}
+pair_modify 	table 0 table/disp 0 shift yes
+
+pair_coeff 	* * lj/cut/coul/long 0.0 0.0
+pair_coeff	1 1 lj/cut/coul/long 0.1553 3.166
+pair_coeff      * * excited/map

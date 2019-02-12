@@ -1,0 +1,11 @@
+#run at NVE
+
+unfix		1
+fix		2 all nve
+
+dump 		1 all custom ${samp_rate} dump.lammpstrj id x y z type
+dump_modify	1 sort id
+dump 		2 all xtc ${samp_rate} dump.xtc  #sorts by default
+dump_modify     2 precision 1000000
+
+run 		${run}
