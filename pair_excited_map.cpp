@@ -61,10 +61,9 @@ PairExcitedMap::~PairExcitedMap() {
 void PairExcitedMap::compute(int eflag, int vflag)
 {
   int j,jj,ih,iih;
-  double qtmp,delx,dely,delz,epair,fpair;
+  double qtmp,delx,dely,delz;
   double rsq,r2inv,rinv,factor_coul;
 
-  epair = 0.0;
   if (eflag || vflag) ev_setup(eflag,vflag);
   else evflag = vflag_fdotr = 0;
 
@@ -269,14 +268,12 @@ void PairExcitedMap::compute(int eflag, int vflag)
   }
 
   //this neglects the constant term in the map energy
-  if (eflag)
-    epair = - mapA*eH - mapB*eH*eH/2;   //in lammps energy units
+  if (eflag_global)
+    eng_vdwl +=  -mapA*eH - mapB*eH*eH/2;
 
-  //TODO: need to figure out virial if want to use pressure
-  //if (evflag) ev_tally(i,j,nlocal,newton_pair,
-  //			 0.0,epair,fpair,delx,dely,delz);
-  //if (vflag_fdotr) virial_fdotr_compute();
-
+  //TODO: is there a way to compute the contribution to the pressure
+  //without fdotr?
+  if (vflag_fdotr) virial_fdotr_compute();
 }
 
 /* ----------------------------------------------------------------------
