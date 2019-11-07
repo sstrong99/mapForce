@@ -30,6 +30,7 @@
 #include "memory.h"
 #include "error.h"
 #include "domain.h"
+#include "utils.h"
 
 using namespace LAMMPS_NS;
 
@@ -360,14 +361,14 @@ void PairExcitedMap::write_restart(FILE *fp)
 void PairExcitedMap::read_restart(FILE *fp)
 {
   if (comm->me == 0) {
-    fread(&cut_global,sizeof(double),1,fp);
-    fread(&cut2,sizeof(double),1,fp);
-    fread(&mapA,sizeof(double),1,fp);
-    fread(&mapB,sizeof(double),1,fp);
+    utils::sfread(FLERR,&cut_global,sizeof(double),1,fp,NULL,error);
+    utils::sfread(FLERR,&cut2,sizeof(double),1,fp,NULL,error);
+    utils::sfread(FLERR,&mapA,sizeof(double),1,fp,NULL,error);
+    utils::sfread(FLERR,&mapB,sizeof(double),1,fp,NULL,error);
 
-    fread(&tagO,sizeof(tagint),1,fp);
-    fread(&tagH,sizeof(tagint),1,fp);
-    fread(&tagH0,sizeof(tagint),1,fp);
+    utils::sfread(FLERR,&tagO,sizeof(tagint),1,fp,NULL,error);
+    utils::sfread(FLERR,&tagH,sizeof(tagint),1,fp,NULL,error);
+    utils::sfread(FLERR,&tagH0,sizeof(tagint),1,fp,NULL,error);
   }
 
   MPI_Bcast(&cut_global,1,MPI_DOUBLE,0,world);
