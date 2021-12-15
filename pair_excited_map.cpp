@@ -286,18 +286,18 @@ void PairExcitedMap::settings(int narg, char **arg)
 {
   if (narg != 5) error->all(FLERR,"Illegal pair_style command");
 
-  cut_global = force->numeric(FLERR,arg[0]);
+  cut_global = utils::numeric(FLERR,arg[0],false,lmp);
   cut2 = cut_global*cut_global;
 
-  typeO= force->inumeric(FLERR,arg[1]);
-  tagO = force->inumeric(FLERR,arg[2]);
+  typeO= utils::inumeric(FLERR,arg[1],false,lmp);
+  tagO = utils::inumeric(FLERR,arg[2],false,lmp);
   tagH = tagO+1; //this requires that hydrogen atoms always follow O
   tagH0= tagH+1;
 
   //these should be input in lammps units
   //we incorporate the negative sign and constants here
-  mapA = - force->numeric(FLERR,arg[3]);  //charge*length
-  mapB = -2 * force->numeric(FLERR,arg[4]);  //(charge*length)^2/energy
+  mapA = - utils::numeric(FLERR,arg[3],false,lmp);  //charge*length
+  mapB = -2 * utils::numeric(FLERR,arg[4],false,lmp);  //(charge*length)^2/energy
 }
 
 /* ----------------------------------------------------------------------
@@ -310,8 +310,8 @@ void PairExcitedMap::coeff(int narg, char **arg)
     error->all(FLERR,"Incorrect args for pair coefficients");
 
   int ilo,ihi,jlo,jhi;
-  force->bounds(FLERR,arg[0],atom->ntypes,ilo,ihi);
-  force->bounds(FLERR,arg[1],atom->ntypes,jlo,jhi);
+  utils::bounds(FLERR,arg[0],1,atom->ntypes,ilo,ihi,error);
+  utils::bounds(FLERR,arg[1],1,atom->ntypes,jlo,jhi,error);
 
   //allocate arrays that pair class expects
   if (!allocated) allocate();
